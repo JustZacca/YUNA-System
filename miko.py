@@ -104,9 +104,11 @@ class Miko:
         anime_name = self.anime.getName()
         self.anime_folder = os.path.join(self.airi.get_destination_folder(), anime_name)
 
+        # Check if the anime folder exists, if not, create it
         if not os.path.exists(self.anime_folder):
-            logger.warning(f"Folder for {anime_name} does not exist.")
-            return []
+            logger.warning(f"Folder for {anime_name} does not exist. Creating the folder...")
+            os.makedirs(self.anime_folder)  # Create the directory
+            logger.info(f"Created folder: {self.anime_folder}")
 
         # Trova gli episodi già presenti
         existing_files = os.listdir(self.anime_folder)
@@ -138,6 +140,7 @@ class Miko:
         if missing or extra:
             return True
         return False
+
 
 
 
