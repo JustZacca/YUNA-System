@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 import animeworld as aw
 import os
+from colorama import Fore, Style, init
+
+# Initialize colorama
+init(autoreset=True)
 
 class Miko:
     def __init__(self):
@@ -15,13 +19,13 @@ class Miko:
         Load an anime by its link and save it to self.anime.
         """
         try:
-            print(f"[INFO] Attempting to load anime from link: {anime_link}")
+            print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} Attempting to load anime from link: {anime_link}")
             self.anime = aw.Anime(anime_link)
             anime_name = self.anime.getName()
-            print(f"[SUCCESS] Anime loaded successfully: {anime_name}")
+            print(f"{Fore.GREEN}[SUCCESS]{Style.RESET_ALL} Anime loaded successfully: {anime_name}")
             return self.anime
         except Exception as e:
-            print(f"[ERROR] Failed to load anime from link '{anime_link}'. Error: {e}")
+            print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} Failed to load anime from link '{anime_link}'. Error: {e}")
             self.anime = None
             return None
         
@@ -30,15 +34,15 @@ class Miko:
         Get all episodes of the loaded anime.
         """
         if self.anime is None:
-            print("[WARNING] No anime loaded. Please load an anime first.")
+            print(f"{Fore.YELLOW}[WARNING]{Style.RESET_ALL} No anime loaded. Please load an anime first.")
             return None
         try:
-            print(f"[INFO] Fetching episodes for anime: {self.anime.getName()}")
+            print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} Fetching episodes for anime: {self.anime.getName()}")
             episodes = self.anime.getEpisodes()
-            print(f"[SUCCESS] Retrieved {len(episodes)} episodes.")
+            print(f"{Fore.GREEN}[SUCCESS]{Style.RESET_ALL} Retrieved {len(episodes)} episodes.")
             return episodes
         except Exception as e:
-            print(f"[ERROR] Failed to fetch episodes for anime '{self.anime.getName()}'. Error: {e}")
+            print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} Failed to fetch episodes for anime '{self.anime.getName()}'. Error: {e}")
             return None
 
     def downloadEpisode(self, episode_list):
@@ -46,7 +50,7 @@ class Miko:
         Download specific episodes of the loaded anime and save them in a folder named after the anime.
         """
         if self.anime is None:
-            print("[WARNING] No anime loaded. Please load an anime first.")
+            print(f"{Fore.YELLOW}[WARNING]{Style.RESET_ALL} No anime loaded. Please load an anime first.")
             return False
 
         anime_name = self.anime.getName()
@@ -55,29 +59,29 @@ class Miko:
         # Create a folder for the anime if it doesn't exist
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
-            print(f"[INFO] Created folder for anime: {folder_path}")
+            print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} Created folder for anime: {folder_path}")
 
         try:
             episodes = self.anime.getEpisodes(episode_list)
         except Exception as e:
-            print(f"[ERROR] Could not retrieve specified episodes. Error: {e}")
+            print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} Could not retrieve specified episodes. Error: {e}")
             return False
 
         for ep in episodes:
             try:
-                print(f"[INFO] Starting download for episode {ep.number} of anime '{anime_name}'.")
-                print(f"[DEBUG] Episode data: {ep.fileInfo()}")
+                print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} Starting download for episode {ep.number} of anime '{anime_name}'.")
+                print(f"{Fore.MAGENTA}[DEBUG]{Style.RESET_ALL} Episode data: {ep.fileInfo()}")
                 ep.download(title=f"{anime_name} - Episode {ep.number}", folder=folder_path)
-                print(f"[SUCCESS] Download completed for episode {ep.number}. Saved to: {folder_path}")
+                print(f"{Fore.GREEN}[SUCCESS]{Style.RESET_ALL} Download completed for episode {ep.number}. Saved to: {folder_path}")
             except ValueError as ve:
-                print(f"[ERROR] JSON parsing failed for episode {ep.number}. This usually means the server response was empty or invalid.")
-                print(f"[DEBUG] ValueError: {ve}")
-                print(f"[DEBUG] Episode object: {vars(ep)}")
+                print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} JSON parsing failed for episode {ep.number}. This usually means the server response was empty or invalid.")
+                print(f"{Fore.MAGENTA}[DEBUG]{Style.RESET_ALL} ValueError: {ve}")
+                print(f"{Fore.MAGENTA}[DEBUG]{Style.RESET_ALL} Episode object: {vars(ep)}")
                 continue
             except Exception as e:
-                print(f"[ERROR] Failed to download episode {ep.number} of anime '{anime_name}'. Error: {e}")
-                print(f"[DEBUG] Episode object: {vars(ep)}")
+                print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} Failed to download episode {ep.number} of anime '{anime_name}'. Error: {e}")
+                print(f"{Fore.MAGENTA}[DEBUG]{Style.RESET_ALL} Episode object: {vars(ep)}")
                 continue
 
-        print(f"[INFO] All requested episodes processed for anime '{anime_name}'.")
+        print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} All requested episodes processed for anime '{anime_name}'.")
         return True
