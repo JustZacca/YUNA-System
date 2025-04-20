@@ -98,20 +98,26 @@ class Airi:
         """
         # Pulisci il nome dell'anime per evitare errori con spazi e caratteri speciali
         anime_name = anime_name.strip().lower()  # Normalizza il nome dell'anime in minuscolo
+        logger.debug(f"Normalized anime_name for search: '{anime_name}'")
 
         # Carica la lista degli anime dal config
         anime_list = self.get_anime()
+        logger.debug(f"Loaded anime list: {anime_list}")
 
         # Itera sulla lista degli anime e cerca una corrispondenza parziale tramite regex
         for anime in anime_list:
             # Ottieni il nome dell'anime
             name = anime.get("name", "").lower()  # Converti il nome a minuscolo per una ricerca case-insensitive
+            logger.debug(f"Checking anime: '{name}' against search term: '{anime_name}'")
             
             # Usa la regex per una ricerca parziale
             if re.search(anime_name, name, re.IGNORECASE):
                 # Se viene trovato un match, restituisci il link
-                return anime.get("link", "Link non disponibile.")
+                link = anime.get("link", "Link non disponibile.")
+                logger.debug(f"Match found. Anime: '{name}', Link: '{link}'")
+                return link
         
         # Se non viene trovato alcun match, restituisci un messaggio di errore
+        logger.debug(f"No match found for anime_name: '{anime_name}'")
         return "Anime non trovato."
 
