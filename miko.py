@@ -119,7 +119,12 @@ class Miko:
             if match
         }
 
-        total_episodes = self.anime.getEpisodes()
+        # Get the list of total episodes using getEpisodes() method
+        total_episodes = self.anime.getEpisodes()  # Use getEpisodes() instead of accessing 'episodes' directly
+        if total_episodes is None:
+            logger.warning(f"Failed to fetch episodes for {anime_name}.")
+            return []
+
         total_numbers = {int(ep.number) for ep in total_episodes}
 
         # Verifica se il numero di episodi nella cartella è diverso da quello totale
@@ -133,6 +138,8 @@ class Miko:
         if missing or extra:
             return True
         return False
+
+
 
     def downloadEpisodes(self, episode_list):
         if self.anime is None:

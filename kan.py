@@ -80,6 +80,7 @@ async def receive_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 # Funzione per gestire il comando /start
+# Funzione per gestire il comando /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user.id
     logger.info(f"Comando /start ricevuto da user_id: {user_id}")
@@ -90,9 +91,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     logger.info("Utente autorizzato. Inviando il messaggio di benvenuto.")
-    await update.message.reply_text("Benvenuto in KAN, spero tu sia Nicholas o non sei il benvenuto.\nPer favore, usa il comando /aggiungi_anime per aggiungere un anime. "+
-                                    "\n Usa il comando /lista_anime per vedere gli anime già aggiunti.\n Usa il comando /download_episodi per scaricare gli episodi di un anime."+
-                                    "\n Usa il comando /cancella_anime per cancellare un anime.\n Usa il comando /help per vedere i comandi disponibili.")
+
+    # Lista dei comandi registrati
+    commands = [
+        "/aggiungi_anime",
+        "/lista_anime",
+        "/trova_anime",
+        "/download_episodi",
+        "/stop_bot"
+    ]
+
+    # Crea un messaggio con i comandi
+    command_list = "\n".join([f"• {command}" for command in commands])
+
+    await update.message.reply_text(
+        f"Benvenuto in KAN, spero tu sia Nicholas o non sei il benvenuto.\n\n"
+    )
+
+    # Imposta i comandi del bot
+    commands = [
+        ('start', 'Avvia il bot'),
+        ('aggiungi_anime', 'Aggiungi un anime'),
+        ('lista_anime', 'Visualizza la lista degli anime'),
+        ('trova_anime', 'Trova un anime'),
+        ('download_episodi', 'Scarica gli episodi'),
+        ('stop_bot', 'Arresta il bot')
+    ]
+    
+    # Usa context.bot invece di update.bot
+    await context.bot.set_my_commands(commands)
+
+    
 
 # Funzione per annullare la conversazione
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -196,27 +225,35 @@ async def download_task(miko_instance: miko.Miko):
         logger.error(f"Errore durante il download: {e}")
 
 async def check_new_episodes(context: ContextTypes.DEFAULT_TYPE):
-    anime_list = airi.get_anime()  # Ottieni la lista degli anime
+    anime_list = airi.get_anime()  # Get the list of anime
+    
+    for anime_data in anime_list:
+        anime_name = anime_data.get('name')  # Extract the anime name
+        link = anime_data.get('link')  # Extract the anime link
+        
+        if anime_name and link:
+            # Create an instance of miko and load the anime
+            miko_instance = miko.Miko()
+            miko_instance.loadAnime(link)
+            
+            # Check for missing episodes
+            missing_episodes = miko_instance.check_missing_episodes()
 
-    for anime in anime_list:
-        anime_name = anime.get("name", "Sconosciuto")  # Ottieni il nome dell'anime
-
-        # Verifica la presenza di nuovi episodi
-        missing_episodes = anime.check_missing_episodes()
-        if missing_episodes:
-            # Invia un messaggio all'utente
-            await context.bot.send_message(
-                chat_id=AUTHORIZED_USER_ID,
-                text=f"Nuovi episodi sono stati trovati per {anime_name}: {missing_episodes}. Avvio il download..."
-            )
-            # Avvia il download
-            await download_new_episodes(anime_name)
+            if missing_episodes:
+                # Handle the case where there are missing episodes
+                await context.bot.send_message(
+                    chat_id=AUTHORIZED_USER_ID,
+                    text=f"Missing episodes for {anime_name}. Starting download..."
+                )
+                await download_new_episodes(anime_name)
+            else:
+                await context.bot.send_message(
+                    chat_id=AUTHORIZED_USER_ID,
+                    text=f"All episodes for {anime_name} are up to date."
+                )
         else:
-            # Invia un messaggio all'utente se non ci sono nuovi episodi
-            await context.bot.send_message(
-                chat_id=AUTHORIZED_USER_ID,
-                text=f"Non ci sono nuovi episodi per {anime_name} al momento."
-            )
+            logger.warning(f"Missing 'name' or 'link' in anime data: {anime_data}")
+
 
 # Funzione per gestire il download in background
 async def download_task(miko_instance: miko.Miko):
@@ -235,13 +272,14 @@ async def download_new_episodes(anime_name: str):
         return
 
     miko_instance = miko.Miko()
-    miko_instance.addAnime(link)
+    miko_instance.loadAnime(link)
 
     # Avvia il download in background
     asyncio.create_task(download_task(miko_instance))  # Avvia il task in parallelo
 
     logger.info(f"Avviato il download per {anime_name}.")
 
+    
 # Funzione principale per avviare il bot
 def main():
     # Ottieni il token dal file .env
@@ -280,7 +318,6 @@ def main():
         interval=3600,  # 3600 secondi = 1 ora
         first=datetime.time(0, 0),  # Inizia a mezzanotte
     )
-
 
      # Funzione per gestire l'interruzione del server (Ctrl+C)
     def signal_handler(sig, frame):
