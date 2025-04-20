@@ -48,24 +48,36 @@ class Miko:
         if self.anime is None:
             print("[WARNING] No anime loaded. Please load an anime first.")
             return False
-        
+
         anime_name = self.anime.getName()
         folder_path = f"./{anime_name}"
-        
+
         # Create a folder for the anime if it doesn't exist
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
             print(f"[INFO] Created folder for anime: {folder_path}")
-        
-        for ep in self.anime.getEpisodes(episode_list):
+
+        try:
+            episodes = self.anime.getEpisodes(episode_list)
+        except Exception as e:
+            print(f"[ERROR] Could not retrieve specified episodes. Error: {e}")
+            return False
+
+        for ep in episodes:
             try:
                 print(f"[INFO] Starting download for episode {ep.number} of anime '{anime_name}'.")
-                print(f"[DEBUG] Episode data: {ep.fileInfo()}")  # Print episode data for debugging
+                print(f"[DEBUG] Episode data: {ep.fileInfo()}")
                 ep.download(title=f"{anime_name} - Episode {ep.number}", folder=folder_path)
                 print(f"[SUCCESS] Download completed for episode {ep.number}. Saved to: {folder_path}")
+            except ValueError as ve:
+                print(f"[ERROR] JSON parsing failed for episode {ep.number}. This usually means the server response was empty or invalid.")
+                print(f"[DEBUG] ValueError: {ve}")
+                print(f"[DEBUG] Episode object: {vars(ep)}")
+                continue
             except Exception as e:
                 print(f"[ERROR] Failed to download episode {ep.number} of anime '{anime_name}'. Error: {e}")
-                print(f"[DEBUG] Episode data at failure: {ep}")  # Print episode data at failure
-                return False
-        print(f"[INFO] All requested episodes downloaded successfully for anime '{anime_name}'.")
+                print(f"[DEBUG] Episode object: {vars(ep)}")
+                continue
+
+        print(f"[INFO] All requested episodes processed for anime '{anime_name}'.")
         return True
