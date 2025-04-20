@@ -1,91 +1,117 @@
+from dotenv import load_dotenv
+import os
 import json
-from typing import List, Dict, Any
+import logging
+from colorama import Fore, Style, init
+from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
+from colorama import init
+import re
+init(autoreset=True)
 
-class AnimeLibrary:
-    def __init__(self, file_path: str):
-        """
-        Inizializza la classe con il percorso del file JSON.
-        :param file_path: Il percorso del file JSON.
-        """
-        self.file_path = file_path
+# Configura il logging con il custom formatter
+formatter = ColoredFormatter(
+    fmt="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
 
-    def carica(self) -> List[Dict[str, Any]]:
-        """
-        Carica il contenuto del file JSON in una lista di dizionari.
-        :return: La lista di anime caricati.
-        """
-        try:
-            with open(self.file_path, 'r', encoding='utf-8') as file:
-                data = json.load(file)
-            return data
-        except FileNotFoundError:
-            print(f"File non trovato: {self.file_path}")
-            return []
-        except json.JSONDecodeError:
-            print("Errore nel decodificare il JSON.")
-            return []
+class Airi:
+    def __init__(self):
+        load_dotenv()  # Carica il file .env nella environment
 
-    def scrivi(self, data: List[Dict[str, Any]]) -> bool:
+        self.destination_folder = os.getenv("DESTINATION_FOLDER")
+        self.telegram_token = os.getenv("TELEGRAM_TOKEN")
+        self.TELEGRAM_CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
+        logger.info(f"Config loaded: destination_folder={self.destination_folder}")
+        
+        self.config_path = "config.json"
+        self.config = self.load_or_create_config()
+        
+    def get_destination_folder(self):
         """
-        Scrive i dati nel file JSON.
-        :param data: La lista di anime da scrivere nel file.
-        :return: True se l'operazione è andata a buon fine, False altrimenti.
+        Restituisce la cartella di destinazione per il download.
         """
-        try:
-            with open(self.file_path, 'w', encoding='utf-8') as file:
-                json.dump(data, file, ensure_ascii=False, indent=4)
-            return True
-        except Exception as e:
-            print(f"Errore nella scrittura del file JSON: {e}")
-            return False
+        if not self.destination_folder:
+            raise ValueError("Destination folder not set in the environment.")
+        return self.destination_folder
+    
+    def load_or_create_config(self):
+        """
+        Carica il file config.json se esiste, altrimenti lo crea vuoto.
+        """
+        if not os.path.exists(self.config_path):
+            logger.info(f"{self.config_path} not found. Creating empty config.")
+            # Creazione di un config vuoto
+            default_config = {
+                "anime": []
+            }
+            with open(self.config_path, "w") as config_file:
+                json.dump(default_config, config_file, indent=4)
+            logger.info(f"{self.config_path} created with empty anime list.")
+            return default_config
 
-    def aggiungi_anime(self, anime: Dict[str, Any]) -> bool:
+        # Se il file esiste, carica il contenuto
+        with open(self.config_path, "r") as config_file:
+            config = json.load(config_file)
+        logger.info(f"{self.config_path} loaded.")
+        return config
+    
+    def get_anime(self):
         """
-        Aggiunge un nuovo anime al file JSON.
-        :param anime: Il dizionario che rappresenta l'anime da aggiungere.
-        :return: True se l'operazione è andata a buon fine, False altrimenti.
+        Ritorna la lista degli anime presenti nel config.
         """
-        data = self.carica()  # Carica i dati esistenti
-        if data is not None:
-            data.append(anime)  # Aggiungi il nuovo anime
-            return self.scrivi(data)
-        return False
+        self.reload_config()
+        return self.config.get("anime", [])
+    
+    def add_anime(self, name, link):
+        """
+        Aggiunge un nuovo anime al file config.json.
+        """
+        anime = {
+            "name": name,
+            "link": link
+        }
+        self.config["anime"].append(anime)
 
-    def aggiorna_anime(self, link: str, updated_anime: Dict[str, Any]) -> bool:
+        # Scrittura nel file config.json
+        with open(self.config_path, "w") as config_file:
+            json.dump(self.config, config_file, indent=4)
+        logger.info(f"Anime '{name}' added to config.")
+        logger.debug(f"Updated config: {json.dumps(self.config, indent=4)}")
+        self.reload_config()
+        
+    def reload_config(self):
         """
-        Aggiorna un anime esistente nel file JSON in base al suo link.
-        :param link: Il link dell'anime da aggiornare.
-        :param updated_anime: I nuovi dati dell'anime.
-        :return: True se l'operazione è andata a buon fine, False altrimenti.
+        Ricarica il file di configurazione.
         """
-        data = self.carica()  # Carica i dati esistenti
-        for i, anime in enumerate(data):
-            if anime.get("link") == link:
-                data[i] = updated_anime  # Aggiorna l'anime
-                return self.scrivi(data)
-        print(f"Anime con link {link} non trovato.")
-        return False
+        self.config = self.load_or_create_config()
+        logger.info(f"Config ricaricato.")
+        
+    def get_anime_link(self, anime_name):
+        """
+        Restituisce il link dell'anime in base al nome (anche parziale) usando una regex.
+        La ricerca è insensibile al maiuscolo/minuscolo.
+        """
+        # Pulisci il nome dell'anime per evitare errori con spazi e caratteri speciali
+        anime_name = anime_name.strip().lower()  # Normalizza il nome dell'anime in minuscolo
 
-    def leggi_anime(self) -> None:
-        """
-        Legge e stampa i dati di tutti gli anime nel file JSON.
-        """
-        data = self.carica()
-        if data:
-            for anime in data:
-                print(f"Anime: {anime['anime']}, Link: {anime['link']}, Stato: {anime['stato']}")
-        else:
-            print("Nessun anime trovato.")
+        # Carica la lista degli anime dal config
+        anime_list = self.get_anime()
+
+        # Itera sulla lista degli anime e cerca una corrispondenza parziale tramite regex
+        for anime in anime_list:
+            # Ottieni il nome dell'anime
+            name = anime.get("name", "").lower()  # Converti il nome a minuscolo per una ricerca case-insensitive
             
-    def trova_link_per_nome(self, nome: str):
-        """
-        Restituisce il link dell'anime dato il suo nome.
-        :param nome: Il nome dell'anime da cercare.
-        :return: Il link dell'anime, o None se non trovato.
-        """
-        data = self.carica()  # Carica i dati esistenti
-        for anime in data:
-            if anime.get("anime").lower() == nome.lower():  # Confronta ignorando maiuscole/minuscole
-                return anime.get("link")
-        print(f"Anime con nome '{nome}' non trovato.")
-        return None
+            # Usa la regex per una ricerca parziale
+            if re.search(anime_name, name, re.IGNORECASE):
+                # Se viene trovato un match, restituisci il link
+                return anime.get("link", "Link non disponibile.")
+        
+        # Se non viene trovato alcun match, restituisci un messaggio di errore
+        return "Anime non trovato."
+

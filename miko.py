@@ -1,10 +1,25 @@
 # -*- coding: utf-8 -*-
 import animeworld as aw
 import os
+import logging
 from colorama import Fore, Style, init
-
-# Initialize colorama
+from airi import Airi
+import re
+from tqdm import tqdm
+from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
+from colorama import init
 init(autoreset=True)
+
+# Configura il logging con il custom formatter
+formatter = ColoredFormatter(
+    fmt="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
 
 class Miko:
     def __init__(self):
@@ -13,19 +28,21 @@ class Miko:
         self.version = "1.0.0"
         self.author = "AnimeWorld"
         self.anime = None  # Variabile d’istanza per salvare l'anime
+        self.airi = Airi()  # Inizializza l'oggetto Airi
+        self.anime_folder = None  # Variabile d’istanza per salvare la cartella dell'anime
     
     def loadAnime(self, anime_link):
         """
         Load an anime by its link and save it to self.anime.
         """
         try:
-            print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} Attempting to load anime from link: {anime_link}")
+            logger.info(f"Attempting to load anime from link: {anime_link}")
             self.anime = aw.Anime(anime_link)
             anime_name = self.anime.getName()
-            print(f"{Fore.GREEN}[SUCCESS]{Style.RESET_ALL} Anime loaded successfully: {anime_name}")
+            logger.info(f"Anime loaded successfully: {anime_name}")
             return self.anime
         except Exception as e:
-            print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} Failed to load anime from link '{anime_link}'. Error: {e}")
+            logger.error(f"Failed to load anime from link '{anime_link}'. Error: {e}")
             self.anime = None
             return None
         
@@ -34,54 +51,80 @@ class Miko:
         Get all episodes of the loaded anime.
         """
         if self.anime is None:
-            print(f"{Fore.YELLOW}[WARNING]{Style.RESET_ALL} No anime loaded. Please load an anime first.")
+            logger.warning("No anime loaded. Please load an anime first.")
             return None
         try:
-            print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} Fetching episodes for anime: {self.anime.getName()}")
+            logger.info(f"Fetching episodes for anime: {self.anime.getName()}")
             episodes = self.anime.getEpisodes()
-            print(f"{Fore.GREEN}[SUCCESS]{Style.RESET_ALL} Retrieved {len(episodes)} episodes.")
+            logger.info(f"Retrieved {len(episodes)} episodes.")
             return episodes
         except Exception as e:
-            print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} Failed to fetch episodes for anime '{self.anime.getName()}'. Error: {e}")
+            logger.error(f"Failed to fetch episodes for anime '{self.anime.getName()}'. Error: {e}")
             return None
 
-    def downloadEpisode(self, episode_list):
-        """
-        Download specific episodes of the loaded anime and save them in a folder named after the anime.
-        """
+    def setupAnimeFolder(self):
         if self.anime is None:
-            print(f"{Fore.YELLOW}[WARNING]{Style.RESET_ALL} No anime loaded. Please load an anime first.")
+            logger.warning("No anime loaded.")
+            return []
+
+        anime_name = self.anime.getName()
+        self.anime_folder = os.path.join(self.airi.get_destination_folder(), anime_name)
+
+        if not os.path.exists(self.anime_folder):
+            os.makedirs(self.anime_folder)
+            logger.info(f"Created folder: {self.anime_folder}")
+            episodes = self.anime.getEpisodes()
+            logger.info(f"Total episodes to download: {len(episodes)}")
+            return [ep.number for ep in episodes]
+
+        # Trova gli episodi già presenti
+        existing_files = os.listdir(self.anime_folder)
+        episode_pattern = re.compile(rf"{re.escape(anime_name)} - Episode (\d+)\.mp4")
+
+        existing_numbers = {
+            int(match.group(1))
+            for f in existing_files
+            for match in [episode_pattern.match(f)]
+            if match
+        }
+
+        total_episodes = self.anime.getEpisodes()
+        missing = [int(ep.number) for ep in total_episodes if int(ep.number) not in existing_numbers]
+
+        logger.info(f"Found {len(existing_numbers)} episode(s) already downloaded.")
+        logger.info(f"{len(missing)} episode(s) still missing: {missing}")
+        
+        return missing
+
+    def downloadEpisodes(self, episode_list):
+        if self.anime is None:
+            logger.warning("No anime loaded.")
             return False
 
         anime_name = self.anime.getName()
-        folder_path = f"./{anime_name}"
-
-        # Create a folder for the anime if it doesn't exist
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-            print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} Created folder for anime: {folder_path}")
 
         try:
-            episodes = self.anime.getEpisodes(episode_list)
+            episodes = self.anime.getEpisodes(episode_list) 
         except Exception as e:
-            print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} Could not retrieve specified episodes. Error: {e}")
+            logger.error(f"Could not retrieve specified episodes. Error: {e}")
             return False
 
-        for ep in episodes:
+        logger.info(f"Starting download of {len(episodes)} episodes...\n")
+
+        for ep in tqdm(episodes, desc="Downloading episodes", unit="ep", colour="cyan"):
             try:
-                print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} Starting download for episode {ep.number} of anime '{anime_name}'.")
-                print(f"{Fore.MAGENTA}[DEBUG]{Style.RESET_ALL} Episode data: {ep.fileInfo()}")
-                ep.download(title=f"{anime_name} - Episode {ep.number}", folder=folder_path)
-                print(f"{Fore.GREEN}[SUCCESS]{Style.RESET_ALL} Download completed for episode {ep.number}. Saved to: {folder_path}")
-            except ValueError as ve:
-                print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} JSON parsing failed for episode {ep.number}. This usually means the server response was empty or invalid.")
-                print(f"{Fore.MAGENTA}[DEBUG]{Style.RESET_ALL} ValueError: {ve}")
-                print(f"{Fore.MAGENTA}[DEBUG]{Style.RESET_ALL} Episode object: {vars(ep)}")
-                continue
+                ep.download(title=f"{anime_name} - Episode {ep.number}", folder=self.anime_folder)
             except Exception as e:
-                print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} Failed to download episode {ep.number} of anime '{anime_name}'. Error: {e}")
-                print(f"{Fore.MAGENTA}[DEBUG]{Style.RESET_ALL} Episode object: {vars(ep)}")
+                tqdm.write(f"[ERROR] Episode {ep.number} failed. Error: {e}")
                 continue
 
-        print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} All requested episodes processed for anime '{anime_name}'.")
+        logger.info("Finished downloading requested episodes.")
         return True
+    
+    def addAnime(self, link):
+        """
+        Aggiunge un nuovo anime al file config.json.
+        """
+        self.loadAnime(link)
+        anime_name = self.anime.getName()
+        self.airi.add_anime(anime_name, link)
