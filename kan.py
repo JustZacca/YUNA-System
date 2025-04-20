@@ -315,7 +315,7 @@ def main():
      # Pianifica il controllo ogni ora
     app.job_queue.run_repeating(
         check_new_episodes,
-        interval=3600,  # 3600 secondi = 1 ora
+        interval=airi.UPDATE_TIME,  # 3600 secondi = 1 ora
         first=datetime.time(0, 0),  # Inizia a mezzanotte
     )
 

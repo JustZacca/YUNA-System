@@ -26,6 +26,7 @@ class Airi:
         self.destination_folder = os.getenv("DESTINATION_FOLDER")
         self.telegram_token = os.getenv("TELEGRAM_TOKEN")
         self.TELEGRAM_CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
+        self.UPDATE_TIME = int(os.getenv("UPDATE_TIME", 60))  # Default to 60 seconds if not set
         logger.info(f"Config loaded: destination_folder={self.destination_folder}")
         
         self.config_path = "config.json"
