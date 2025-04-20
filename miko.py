@@ -60,10 +60,12 @@ class Miko:
         for ep in self.anime.getEpisodes(episode_list):
             try:
                 print(f"[INFO] Starting download for episode {ep.number} of anime '{anime_name}'.")
+                print(f"[DEBUG] Episode data: {ep.fileInfo}")  # Print episode data for debugging
                 ep.download(title=f"{anime_name} - Episode {ep.number}", folder=folder_path)
                 print(f"[SUCCESS] Download completed for episode {ep.number}. Saved to: {folder_path}")
             except Exception as e:
                 print(f"[ERROR] Failed to download episode {ep.number} of anime '{anime_name}'. Error: {e}")
+                print(f"[DEBUG] Episode data at failure: {ep}")  # Print episode data at failure
                 return False
         print(f"[INFO] All requested episodes downloaded successfully for anime '{anime_name}'.")
         return True
