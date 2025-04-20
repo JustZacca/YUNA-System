@@ -7,6 +7,7 @@ import logging
 from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
 import signal
 import asyncio
+import datetime
 
 # Inizializza colorama
 from colorama import init
@@ -46,6 +47,19 @@ async def aggiungi_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text("Per favore, inviami un link di AnimeWorld.")
     return LINK
 
+async def stop_bot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    logger.info(f"Comando /stop_bot ricevuto da user_id: {user_id}")
+
+    if user_id != AUTHORIZED_USER_ID:
+        logger.warning(f"Accesso negato per user_id: {user_id}")
+        await update.message.reply_text("Non sei autorizzato a usare questo comando.")
+        return
+
+    logger.info("Utente autorizzato. Arresto del bot in corso...")
+    await update.message.reply_text("Arresto del bot in corso...")
+    os.kill(os.getpid(), signal.SIGINT)
+    
 # Funzione per ricevere il link di AnimeWorld
 async def receive_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     link = update.message.text
@@ -162,7 +176,7 @@ async def download_episodi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # Inizializza Miko e scarica gli episodi
         miko_instance = miko.Miko()
-        miko_instance.addAnime(link)
+        miko_instance.loadAnime(link)
 
         # Informa l'utente che il download è iniziato
         await update.message.reply_text("Scaricamento degli episodi in corso...")
@@ -180,6 +194,53 @@ async def download_task(miko_instance: miko.Miko):
         logger.info("Download completato.")
     except Exception as e:
         logger.error(f"Errore durante il download: {e}")
+
+async def check_new_episodes(context: ContextTypes.DEFAULT_TYPE):
+    anime_list = airi.get_anime()  # Ottieni la lista degli anime
+
+    for anime in anime_list:
+        anime_name = anime.get("name", "Sconosciuto")  # Ottieni il nome dell'anime
+
+        # Verifica la presenza di nuovi episodi
+        missing_episodes = anime.check_missing_episodes()
+        if missing_episodes:
+            # Invia un messaggio all'utente
+            await context.bot.send_message(
+                chat_id=AUTHORIZED_USER_ID,
+                text=f"Nuovi episodi sono stati trovati per {anime_name}: {missing_episodes}. Avvio il download..."
+            )
+            # Avvia il download
+            await download_new_episodes(anime_name)
+        else:
+            # Invia un messaggio all'utente se non ci sono nuovi episodi
+            await context.bot.send_message(
+                chat_id=AUTHORIZED_USER_ID,
+                text=f"Non ci sono nuovi episodi per {anime_name} al momento."
+            )
+
+# Funzione per gestire il download in background
+async def download_task(miko_instance: miko.Miko):
+    try:
+        miko_instance.downloadEpisodes(miko_instance.setupAnimeFolder())
+        logger.info("Download completato.")
+        
+    except Exception as e:
+        logger.error(f"Errore durante il download: {e}")
+
+async def download_new_episodes(anime_name: str):
+    link = airi.get_anime_link(anime_name)
+
+    if link == "Anime non trovato.":
+        logger.error(f"Anime {anime_name} non trovato.")
+        return
+
+    miko_instance = miko.Miko()
+    miko_instance.addAnime(link)
+
+    # Avvia il download in background
+    asyncio.create_task(download_task(miko_instance))  # Avvia il task in parallelo
+
+    logger.info(f"Avviato il download per {anime_name}.")
 
 # Funzione principale per avviare il bot
 def main():
@@ -211,6 +272,15 @@ def main():
     app.add_handler(CommandHandler("lista_anime", lista_anime))
     app.add_handler(CommandHandler("trova_anime", trova_anime))
     app.add_handler(CommandHandler("download_episodi", download_episodi))
+    app.add_handler(CommandHandler("stop_bot", stop_bot))
+
+     # Pianifica il controllo ogni ora
+    app.job_queue.run_repeating(
+        check_new_episodes,
+        interval=3600,  # 3600 secondi = 1 ora
+        first=datetime.time(0, 0),  # Inizia a mezzanotte
+    )
+
 
      # Funzione per gestire l'interruzione del server (Ctrl+C)
     def signal_handler(sig, frame):

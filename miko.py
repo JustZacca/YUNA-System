@@ -95,6 +95,44 @@ class Miko:
         logger.info(f"{len(missing)} episode(s) still missing: {missing}")
         
         return missing
+    
+    def check_missing_episodes(self):
+        if self.anime is None:
+            logger.warning("No anime loaded.")
+            return []
+
+        anime_name = self.anime.getName()
+        self.anime_folder = os.path.join(self.airi.get_destination_folder(), anime_name)
+
+        if not os.path.exists(self.anime_folder):
+            logger.warning(f"Folder for {anime_name} does not exist.")
+            return []
+
+        # Trova gli episodi già presenti
+        existing_files = os.listdir(self.anime_folder)
+        episode_pattern = re.compile(rf"{re.escape(anime_name)} - Episode (\d+)\.mp4")
+
+        existing_numbers = {
+            int(match.group(1))
+            for f in existing_files
+            for match in [episode_pattern.match(f)]
+            if match
+        }
+
+        total_episodes = self.anime.getEpisodes()
+        total_numbers = {int(ep.number) for ep in total_episodes}
+
+        # Verifica se il numero di episodi nella cartella è diverso da quello totale
+        missing = total_numbers - existing_numbers
+        extra = existing_numbers - total_numbers
+
+        logger.info(f"Found {len(existing_numbers)} episode(s) already downloaded.")
+        logger.info(f"{len(missing)} episode(s) still missing: {missing}")
+        logger.info(f"{len(extra)} extra episode(s) found: {extra}")
+
+        if missing or extra:
+            return True
+        return False
 
     def downloadEpisodes(self, episode_list):
         if self.anime is None:
