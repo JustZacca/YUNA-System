@@ -1,5 +1,5 @@
 import animeworld as aw
-import concurrent.futures
+import os
 
 class Miko:
     def __init__(self):
@@ -38,31 +38,28 @@ class Miko:
 
     def downloadEpisode(self, episode_list):
         """
-        Download specific episodes of the loaded anime in parallel using multithreading.
+        Download a specific episode of the loaded anime and save it in a folder named after the anime.
         """
         if self.anime is None:
             print("No anime loaded.")
             return False
         
-        def download_single_episode(episode_number):
+        anime_name = self.anime.getName()
+        folder_path = f"./{anime_name}"
+        
+        # Create a folder for the anime if it doesn't exist
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+            print(f"Created folder: {folder_path}")
+        
+        for ep in self.anime.getEpisodes(episode_list):
             try:
-                # Recupera l'episodio tramite il numero
-                episode = self.anime.getEpisode(episode_number)
-                print(f"Downloading episode {episode.number}.")
-                episode.download()
-                print(f"Download completed for episode {episode.number}.")
+                print(f"Downloading episode {ep.number}.")
+
+                # Save the episode {in the anime folder
+                ep.download(title=f"{self.anime.getName()} - Episode {ep.number}", folder=folder_path)
+                print(f"Download completed for episode {ep.number}.")
             except Exception as e:
-                print(f"Error downloading episode {episode_number}: {e}")
+                print(f"Error downloading episode {ep.number}: {e}")
                 return False
-            return True
-
-        # Use ThreadPoolExecutor to download episodes concurrently
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            results = list(executor.map(download_single_episode, episode_list))
-
-        # Check if all downloads were successful
-        if all(results):
-            return True
-        else:
-            print("Some episodes failed to download.")
-            return False
+        return True
