@@ -5,10 +5,12 @@ import logging
 from colorama import Fore, Style, init
 from airi import Airi
 import re
-from tqdm import tqdm
 from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
 from colorama import init
+from datetime import datetime, timezone
+import asyncio
 init(autoreset=True)
+
 
 # Configura il logging con il custom formatter
 class ColoredFormatterWithClass(ColoredFormatter):
@@ -38,6 +40,8 @@ class Miko:
         self.anime = None  # Variabile d’istanza per salvare l'anime
         self.airi = Airi()  # Inizializza l'oggetto Airi
         self.anime_folder = None  # Variabile d’istanza per salvare la cartella dell'anime
+        self.aw = aw
+        self.aw.SES.base_url = self.airi.BASE_URL
     
     def loadAnime(self, anime_link):
         """
@@ -45,7 +49,7 @@ class Miko:
         """
         try:
             logger.info(f"Caricamento anime da link: {anime_link}", extra={"classname": self.__class__.__name__})
-            self.anime = aw.Anime(anime_link)
+            self.anime = self.aw.Anime(anime_link)
             anime_name = self.anime.getName()
             logger.info(f"Anime caricato: {anime_name}", extra={"classname": self.__class__.__name__})
             return self.anime
@@ -181,7 +185,24 @@ class Miko:
 
         return True
 
-    def downloadEpisodes(self, episode_list):
+    def my_hook(self, d, width=70):
+        """
+        Stampa una ProgressBar con tutte le informazioni di download.
+        """
+        if d['status'] == 'downloading':
+            out = "{filename}:\n[{bar}][{percentage:^6.1%}]\n{downloaded_bytes}/{total_bytes} in {elapsed:%H:%M:%S} (ETA: {eta:%H:%M:%S})\x1B[3A"
+            
+            # Usa datetime.fromtimestamp con tz=timezone.utc per ottenere un datetime consapevole del fuso orario
+            d['elapsed'] = datetime.fromtimestamp(d['elapsed'], tz=timezone.utc)
+            d['eta'] = datetime.fromtimestamp(d['eta'], tz=timezone.utc)
+            d['bar'] = '#'*int(width*d['percentage']) + ' '*(width-int(width*d['percentage']))
+
+            print(out.format(**d))
+
+        elif d['status'] == 'finished':
+            print('\n\n\n')
+
+    async def downloadEpisodes(self, episode_list):
         if self.anime is None:
             logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
             return False
@@ -189,23 +210,24 @@ class Miko:
         anime_name = self.anime.getName()
 
         try:
-            episodes = self.anime.getEpisodes(episode_list) 
+            episodes = self.anime.getEpisodes(episode_list)
         except Exception as e:
             logger.error(f"Impossibile recuperare gli episodi specificati. Errore: {e}", extra={"classname": self.__class__.__name__})
             return False
 
-        logger.info(f"Inizio download di {len(episodes)} episodi...\n", extra={"classname": self.__class__.__name__})
+        logger.info(f"Inizio download di {len(episodes)} episodi...", extra={"classname": self.__class__.__name__})
 
-        for ep in tqdm(episodes, desc="Scaricando episodi", unit="ep", colour="cyan"):
+        for ep in episodes:
             try:
-                ep.download(title=f"{anime_name} - Episode {ep.number}", folder=self.anime_folder)
+                # Aggiungi l'hook per visualizzare il progresso del download
+                ep.download(title=f"{anime_name} - Episode {ep.number}", folder=self.anime_folder, hook=self.my_hook)
             except Exception as e:
-                tqdm.write(f"[ERRORE] Episodio {ep.number} fallito. Errore: {e}")
+                logger.error(f"[ERRORE] Episodio {ep.number} fallito. Errore: {e}", extra={"classname": self.__class__.__name__})
                 continue
 
         logger.info("Download degli episodi completato.", extra={"classname": self.__class__.__name__})
         return True
-    
+        
     def addAnime(self, link):
         """
         Aggiunge un nuovo anime al file config.json.

@@ -6,6 +6,8 @@ from colorama import Fore, Style, init
 from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
 from colorama import init
 import re
+from urllib.parse import urlparse
+
 init(autoreset=True)
 
 # Configura il logging con il custom formatter
@@ -27,6 +29,7 @@ class Airi:
         self.telegram_token = os.getenv("TELEGRAM_TOKEN")
         self.TELEGRAM_CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
         self.UPDATE_TIME = int(os.getenv("UPDATE_TIME", 60))  # Default a 60 secondi se non impostato
+        self.BASE_URL = os.getenv("BASE_URL", "https://www.animeworld.ac")
         logger.info(f"Configurazione caricata: destination_folder={self.destination_folder}")
         
         self.config_path = "config.json"
@@ -68,24 +71,28 @@ class Airi:
         self.reload_config()
         return self.config.get("anime", [])
     
+
     def add_anime(self, name, link, last_update):
         """
         Aggiunge un nuovo anime al file config.json se non esiste già un anime con lo stesso link.
         """
         self.reload_config()
 
+        # Rimuove il base URL, mantiene solo il path (es: /play/nome-anime.xyz)
+        parsed_link = urlparse(link).path
+
         # Controlla se esiste già un anime con lo stesso link
         for anime in self.config["anime"]:
-            if anime.get("link") == link:
-                logger.warning(f"L'anime con il link '{link}' esiste già. Aggiunta saltata.")
+            if anime.get("link") == parsed_link:
+                logger.warning(f"L'anime con il link '{parsed_link}' esiste già. Aggiunta saltata.")
                 return
 
         # Se non esiste, aggiungi il nuovo anime
         anime = {
             "name": name,
-            "link": link,
-            "last_update": last_update.strftime("%Y-%m-%d %H:%M:%S"),  # Formatta la data in stringa
-            "episodi_scaricati": 0  # Inizializza a 0
+            "link": parsed_link,
+            "last_update": last_update.strftime("%Y-%m-%d %H:%M:%S"),
+            "episodi_scaricati": 0
         }
         self.config["anime"].append(anime)
 
