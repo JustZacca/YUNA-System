@@ -94,7 +94,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/lista_anime",
         "/trova_anime",
         "/download_episodi",
-        "/stop_bot"
+        "/stop_bot",
+        "/aggiorna_libreria"
+    
     ]
     command_list = "\n".join([f"• {command}" for command in commands])
 
@@ -109,7 +111,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         ('lista_anime', 'Visualizza la lista degli anime'),
         ('trova_anime', 'Trova un anime'),
         ('download_episodi', 'Scarica gli episodi'),
-        ('stop_bot', 'Arresta il bot')
+        ('stop_bot', 'Arresta il bot'),
+        ('aggiorna_libreria', 'Aggiorna la libreria lanciando manualmente il job'),
     ]
     await context.bot.set_my_commands(commands)
 
@@ -347,6 +350,22 @@ async def download_new_episodes(anime_name: str):
 
     logger.info(f"Avviato download per {anime_name}.")
 
+async def aggiorna_libreria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    logger.info(f"/aggiorna_libreria from {user_id}")
+
+    if user_id != AUTHORIZED_USER_ID:
+        logger.warning(f"Unauthorized access: {user_id}")
+        await update.message.reply_text("Non sei autorizzato a usare questo comando.")
+        return
+
+    logger.info("Authorized. Triggering job for updating library...")
+    
+    # Triggera manualmente il job check_new_episodes
+    context.application.job_queue.run_once(check_new_episodes, 0, job_kwargs={'max_instances': 3})
+
+    await update.message.reply_text("Aggiornamento della libreria avviato! 🚀")
+
 
 # Main function to run the bot
 def main():
@@ -394,6 +413,8 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_inline_button))
     app.add_handler(CallbackQueryHandler(handle_search_decision))
     app.add_handler(CommandHandler("lista_anime", lista_anime))
+    aggiorna_libreria_handler = CommandHandler("aggiorna_libreria", aggiorna_libreria)
+    app.add_handler(aggiorna_libreria_handler)
     app.job_queue.run_repeating(
         check_new_episodes,
         interval=airi.UPDATE_TIME,  
