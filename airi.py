@@ -70,12 +70,21 @@ class Airi:
     
     def add_anime(self, name, link, last_update):
         """
-        Aggiunge un nuovo anime al file config.json.
+        Aggiunge un nuovo anime al file config.json se non esiste già un anime con lo stesso link.
         """
+        self.reload_config()
+
+        # Controlla se esiste già un anime con lo stesso link
+        for anime in self.config["anime"]:
+            if anime.get("link") == link:
+                logger.warning(f"Anime with link '{link}' already exists. Skipping addition.")
+                return
+
+        # Se non esiste, aggiungi il nuovo anime
         anime = {
             "name": name,
             "link": link,
-            "last_update" : last_update.strftime("%Y-%m-%d %H:%M:%S")  # Formatta la data in stringa
+            "last_update": last_update.strftime("%Y-%m-%d %H:%M:%S")  # Formatta la data in stringa
         }
         self.config["anime"].append(anime)
 
@@ -84,7 +93,7 @@ class Airi:
             json.dump(self.config, config_file, indent=4)
         logger.info(f"Anime '{name}' added to config.")
         logger.debug(f"Updated config: {json.dumps(self.config, indent=4)}")
-        self.reload_config()
+        
         
     def reload_config(self):
         """
