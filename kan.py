@@ -393,6 +393,7 @@ def main():
     app.add_handler(trova_anime_conversation)
     app.add_handler(CallbackQueryHandler(handle_inline_button))
     app.add_handler(CallbackQueryHandler(handle_search_decision))
+    app.add_handler(CommandHandler("lista_anime", lista_anime))
     app.job_queue.run_repeating(
         check_new_episodes,
         interval=airi.UPDATE_TIME,  
