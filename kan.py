@@ -245,14 +245,52 @@ async def download_episodi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if user_id != AUTHORIZED_USER_ID:
-        logger.warning(f"Unauthorized access: {user_id}")
+        logger.warning(f"Accesso negato: {user_id}")
         await update.message.reply_text("Non sei autorizzato a usare questo bot.")
         return
 
     logger.info("Attendo il nome dell'anime per il download.")
-    await update.message.reply_text("Scrivi il nome dell'anime di cui vuoi scaricare gli episodi 🎬.")
+    await update.message.reply_text("Per favore, inviami il nome dell'anime di cui vuoi scaricare gli episodi.")
     return LINK
 
+
+async def receive_anime_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.effective_user.id
+    anime_name = update.message.text.strip()
+
+    logger.info(f"Nome anime per download ricevuto: {anime_name}")
+    link = airi.get_anime_link(anime_name)
+
+    if link == "Anime non trovato.":
+        await update.message.reply_text("Non sono riuscito a trovare l'anime. Assicurati che il nome sia corretto.")
+        return LINK  # This will make the bot ask for the anime name again
+
+    else:
+        miko_instance = miko.Miko()
+        miko_instance.loadAnime(link)
+
+        await update.message.reply_text("Scaricamento in corso...")
+
+        if not await download_task(miko_instance):  # Check if the download task returns False
+            await update.message.reply_text(f"🎬 Tutti gli episodi di {anime_name} sono già scaricati.")
+            return ConversationHandler.END  # End the conversation if no episodes need to be downloaded
+        await update.message.reply_text(f"🎬 Tutti gli episodi di {anime_name} sono stati scaricati ")
+        return ConversationHandler.END  # End the conversation when the download starts
+
+
+async def download_task(miko_instance: miko.Miko):
+    try:
+        anime_folder = miko_instance.setupAnimeFolder()
+        if not anime_folder:  # Check if the list is empty or zero
+            logger.info("Nessun episodio da scaricare. Operazione annullata.")
+            return False
+        await miko_instance.downloadEpisodes(anime_folder)
+        logger.info("Download completato.")
+        return True
+
+    except Exception as e:
+        logger.error(f"Errore download: {e}")
+        
 # Main function to run the bot
 def main():
     TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -281,6 +319,13 @@ def main():
         },
         fallbacks=[],
     )
+    app.add_handler(ConversationHandler(
+        entry_points=[CommandHandler("download_episodi", download_episodi)],
+        states={
+            LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_anime_name)],
+        },
+        fallbacks=[],
+    ))
 
     app.add_handler(CallbackQueryHandler(handle_inline_button, pattern="^anime_"))
     app.add_handler(CallbackQueryHandler(handle_search_decision, pattern="^(search_more|cancel_search)$"))
