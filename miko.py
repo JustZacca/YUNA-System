@@ -240,3 +240,20 @@ class Miko:
         last_episode_info = episodes[-1].fileInfo()
         last_modified = last_episode_info.get("last_modified", "Sconosciuto")
         self.airi.add_anime(anime_name, link, last_modified)
+        
+    def findAnime(self, anime_name):
+        """
+        Trova un anime su animeworld e ne restituisce nome e link
+        """
+        try:
+            risultati = self.aw.find(anime_name)
+            if risultati:
+                anime_list = [{"name": anime["name"], "link": anime["link"]} for anime in risultati]
+                logger.info(f"{len(anime_list)} risultati trovati per '{anime_name}'.", extra={"classname": self.__class__.__name__})
+                return anime_list
+            else:
+                logger.warning(f"Nessun risultato trovato per '{anime_name}'.", extra={"classname": self.__class__.__name__})
+                return []
+        except Exception as e:
+            logger.error(f"Errore durante la ricerca di '{anime_name}': {e}", extra={"classname": self.__class__.__name__})
+            return []
