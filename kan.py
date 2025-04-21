@@ -230,6 +230,7 @@ async def check_new_episodes(context: ContextTypes.DEFAULT_TYPE):
     for anime_data in anime_list:
         anime_name = anime_data.get('name')  # Extract the anime name
         link = anime_data.get('link')  # Extract the anime link
+        last_update = anime_data.get('last_update')  # Extract the last update time
         
         if anime_name and link:
             # Create an instance of miko and load the anime
@@ -247,10 +248,7 @@ async def check_new_episodes(context: ContextTypes.DEFAULT_TYPE):
                 )
                 await download_new_episodes(anime_name)
             else:
-                await context.bot.send_message(
-                    chat_id=AUTHORIZED_USER_ID,
-                    text=f"All episodes for {anime_name} are up to date."
-                )
+                logger.info(f"All episodes for {anime_name} are up to date.")
         else:
             logger.warning(f"Missing 'name' or 'link' in anime data: {anime_data}")
 
