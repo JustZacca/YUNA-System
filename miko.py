@@ -175,4 +175,7 @@ class Miko:
         """
         self.loadAnime(link)
         anime_name = self.anime.getName()
-        self.airi.add_anime(anime_name, link)
+        episodes = self.anime.getEpisodes()
+        last_episode_info = episodes[-1].fileInfo()
+        last_modified = last_episode_info.get("last_modified", "Unknown")
+        self.airi.add_anime(anime_name, link, last_modified)

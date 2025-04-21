@@ -68,13 +68,14 @@ class Airi:
         self.reload_config()
         return self.config.get("anime", [])
     
-    def add_anime(self, name, link):
+    def add_anime(self, name, link, last_update):
         """
         Aggiunge un nuovo anime al file config.json.
         """
         anime = {
             "name": name,
-            "link": link
+            "link": link,
+            "last_update" : last_update.strftime("%Y-%m-%d %H:%M:%S")  # Formatta la data in stringa
         }
         self.config["anime"].append(anime)
 

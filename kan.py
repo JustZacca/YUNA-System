@@ -8,6 +8,7 @@ from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter d
 import signal
 import asyncio
 import datetime
+from dateutil import parser
 
 # Inizializza colorama
 from colorama import init
@@ -232,25 +233,33 @@ async def check_new_episodes(context: ContextTypes.DEFAULT_TYPE):
         link = anime_data.get('link')  # Extract the anime link
         last_update = anime_data.get('last_update')  # Extract the last update time
         
-        if anime_name and link:
-            # Create an instance of miko and load the anime
-            miko_instance = miko.Miko()
-            miko_instance.loadAnime(link)
+        if anime_name and link and last_update:
+            # Parse the last update time
+            last_update_date = parser.parse(last_update)
+            days_since_update = (datetime.datetime.now() - last_update_date).days
             
-            # Check for missing episodes
-            missing_episodes = miko_instance.check_missing_episodes()
+            # Check if 7 days have passed since the last update
+            if days_since_update >= 7 and days_since_update < 28:
+                # Create an instance of miko and load the anime
+                miko_instance = miko.Miko()
+                miko_instance.loadAnime(link)
+                
+                # Check for missing episodes
+                missing_episodes = miko_instance.check_missing_episodes()
 
-            if missing_episodes:
-                # Handle the case where there are missing episodes
-                await context.bot.send_message(
-                    chat_id=AUTHORIZED_USER_ID,
-                    text=f"Missing episodes for {anime_name}. Starting download..."
-                )
-                await download_new_episodes(anime_name)
+                if missing_episodes:
+                    # Handle the case where there are missing episodes
+                    await context.bot.send_message(
+                        chat_id=AUTHORIZED_USER_ID,
+                        text=f"Missing episodes for {anime_name}. Starting download..."
+                    )
+                    await download_new_episodes(anime_name)
+                else:
+                    logger.info(f"All episodes for {anime_name} are up to date.")
             else:
-                logger.info(f"All episodes for {anime_name} are up to date.")
+                logger.info(f"Last update for {anime_name} was {days_since_update} days ago. Skipping check.")
         else:
-            logger.warning(f"Missing 'name' or 'link' in anime data: {anime_data}")
+            logger.warning(f"Missing 'name', 'link', or 'last_update' in anime data: {anime_data}")
 
 
 # Funzione per gestire il download in background
