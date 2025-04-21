@@ -8,7 +8,7 @@ import re
 from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
 from colorama import init
 from datetime import datetime, timezone
-import asyncio
+import JellyfinClient as jfc
 init(autoreset=True)
 
 
@@ -42,6 +42,7 @@ class Miko:
         self.anime_folder = None  # Variabile d’istanza per salvare la cartella dell'anime
         self.aw = aw
         self.aw.SES.base_url = self.airi.BASE_URL
+        self.jellyfin = jfc()
     
     def loadAnime(self, anime_link):
         """
@@ -221,6 +222,7 @@ class Miko:
             try:
                 # Aggiungi l'hook per visualizzare il progresso del download
                 ep.download(title=f"{anime_name} - Episode {ep.number}", folder=self.anime_folder, hook=self.my_hook)
+                self.jellyfin.trigger_scan()
             except Exception as e:
                 logger.error(f"[ERRORE] Episodio {ep.number} fallito. Errore: {e}", extra={"classname": self.__class__.__name__})
                 continue
