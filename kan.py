@@ -290,7 +290,64 @@ async def download_task(miko_instance: miko.Miko):
 
     except Exception as e:
         logger.error(f"Errore download: {e}")
-        
+
+async def check_new_episodes(context: ContextTypes.DEFAULT_TYPE):
+    miko_instance = miko.Miko()
+    anime_list = airi.get_anime()
+    
+    for anime_data in anime_list:
+        anime_name = anime_data.get('name')
+        link = anime_data.get('link')
+        last_update = anime_data.get('last_update')
+        episodi_scaricati = anime_data.get('episodi_scaricati', 0)
+
+        if not (anime_name and link and last_update):
+            logger.warning(f"Dati mancanti in {anime_data}")
+            continue
+
+        last_update_date = parser.parse(last_update)
+        days_since_update = (datetime.datetime.now() - last_update_date).days
+
+        # Salta se aggiornato di recente
+        if episodi_scaricati > 0 and days_since_update < 7:
+            logger.info(f"L'ultimo aggiornamento di {anime_name} è {days_since_update} giorni fa. Salto controllo.")
+            continue
+
+        miko_instance.count_and_update_episodes(anime_name, episodi_scaricati)
+        miko_instance.loadAnime(link)
+
+        missing_episodes = miko_instance.check_missing_episodes()
+
+        if missing_episodes:
+            logger.info(f"Episodi mancanti per {anime_name}: {missing_episodes}")
+            await context.bot.send_message(
+                chat_id=AUTHORIZED_USER_ID,
+                text=f"Episodi mancanti per {anime_name}. Inizio download..."
+            )
+            await download_new_episodes(anime_name)
+            await context.bot.send_message(
+                chat_id=AUTHORIZED_USER_ID,
+                text=f"🎬 Tutti gli episodi di {anime_name} sono stati scaricati."
+            )
+        else:
+            logger.info(f"Tutti gli episodi di {anime_name} sono aggiornati.")
+
+
+async def download_new_episodes(anime_name: str):
+    link = airi.get_anime_link(anime_name)
+
+    if link == "Anime non trovato.":
+        logger.error(f"Anime {anime_name} non trovato.")
+        return
+
+    miko_instance = miko.Miko()
+    miko_instance.loadAnime(link)
+
+    await download_task(miko_instance)  # Avvia il task in parallelo
+
+    logger.info(f"Avviato download per {anime_name}.")
+
+
 # Main function to run the bot
 def main():
     TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -336,7 +393,21 @@ def main():
     app.add_handler(trova_anime_conversation)
     app.add_handler(CallbackQueryHandler(handle_inline_button))
     app.add_handler(CallbackQueryHandler(handle_search_decision))
+    app.job_queue.run_repeating(
+        check_new_episodes,
+        interval=airi.UPDATE_TIME,  
+        first=datetime.time(0, 0),
+        job_kwargs={'max_instances': 3}
+    )
 
+    def signal_handler(sig, frame):
+        logger.info("Arresto bot... Interruzione manuale.")
+        app.stop()
+
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    logger.info("Bot in esecuzione.")
+    
     app.run_polling()
 
 if __name__ == "__main__":
