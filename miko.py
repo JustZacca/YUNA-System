@@ -8,7 +8,7 @@ import re
 from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
 from colorama import init
 from datetime import datetime, timezone
-import JellyfinClient as jfc
+import JellyfinClient
 init(autoreset=True)
 
 
@@ -42,7 +42,7 @@ class Miko:
         self.anime_folder = None  # Variabile d’istanza per salvare la cartella dell'anime
         self.aw = aw
         self.aw.SES.base_url = self.airi.BASE_URL
-        self.jellyfin = jfc()
+        self.jellyfin = JellyfinClient.JellyfinClient()  # Initialize the client correctly
     
     def loadAnime(self, anime_link):
         """
