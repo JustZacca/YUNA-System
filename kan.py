@@ -16,8 +16,8 @@ init(autoreset=True)
 
 # Configura il logging con il custom formatter
 formatter = ColoredFormatter(
-    fmt="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    fmt="\033[34m%(asctime)s\033[0m - %(levelname)s - %(message)s",  # Make the time blue
+    datefmt="%Y-%m-%d %H:%M:%S"  # Keep the date format
 )
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
@@ -37,34 +37,34 @@ LINK = 1
 # Funzione per avviare la conversazione con /aggiungi_anime
 async def aggiungi_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.message.from_user.id
-    logger.info(f"Comando /aggiungi_anime ricevuto da user_id: {user_id}")
+    logger.info(f"/aggiungi_anime da {user_id}")
 
     if user_id != AUTHORIZED_USER_ID:
-        logger.warning(f"Accesso negato per user_id: {user_id}")
+        logger.warning(f"Accesso negato: {user_id}")
         await update.message.reply_text("Non sei autorizzato a usare questo bot.")
         return ConversationHandler.END
 
-    logger.info("Utente autorizzato. Avvio della conversazione per aggiungere anime.")
+    logger.info("Autorizzato. Attendo link.")
     await update.message.reply_text("Per favore, inviami un link di AnimeWorld.")
     return LINK
 
 async def stop_bot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user.id
-    logger.info(f"Comando /stop_bot ricevuto da user_id: {user_id}")
+    logger.info(f"/stop_bot da {user_id}")
 
     if user_id != AUTHORIZED_USER_ID:
-        logger.warning(f"Accesso negato per user_id: {user_id}")
+        logger.warning(f"Accesso negato: {user_id}")
         await update.message.reply_text("Non sei autorizzato a usare questo comando.")
         return
 
-    logger.info("Utente autorizzato. Arresto del bot in corso...")
+    logger.info("Autorizzato. Arresto bot.")
     await update.message.reply_text("Arresto del bot in corso...")
     os.kill(os.getpid(), signal.SIGINT)
     
 # Funzione per ricevere il link di AnimeWorld
 async def receive_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     link = update.message.text
-    logger.info(f"Link ricevuto: {link}")
+    logger.info(f"Link: {link}")
 
     if 'animeworld' in link and link.startswith("https://"):
         try:
@@ -73,27 +73,25 @@ async def receive_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             logger.info(f"Anime aggiunto: {link}")
             await update.message.reply_text(f"Anime aggiunto con successo: {link}")
         except Exception as e:
-            logger.error(f"Errore durante l'aggiunta dell'anime: {e}")
+            logger.error(f"Errore aggiunta anime: {e}")
             await update.message.reply_text("Si è verificato un errore nell'aggiunta dell'anime. Riprova più tardi.")
     else:
-        logger.warning("Link non valido ricevuto.")
+        logger.warning("Link non valido.")
         await update.message.reply_text("Il link non sembra provenire da AnimeWorld o non è formattato correttamente.")
     return ConversationHandler.END
 
 # Funzione per gestire il comando /start
-# Funzione per gestire il comando /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user.id
-    logger.info(f"Comando /start ricevuto da user_id: {user_id}")
+    logger.info(f"/start da {user_id}")
 
     if user_id != AUTHORIZED_USER_ID:
-        logger.warning(f"Accesso negato per user_id: {user_id}")
+        logger.warning(f"Accesso negato: {user_id}")
         await update.message.reply_text("Non sei autorizzato a usare questo bot.")
         return
 
-    logger.info("Utente autorizzato. Inviando il messaggio di benvenuto.")
-
-    # Lista dei comandi registrati
+    logger.info("Autorizzato. Inviando messaggio di benvenuto.")
+    
     commands = [
         "/aggiungi_anime",
         "/lista_anime",
@@ -101,15 +99,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/download_episodi",
         "/stop_bot"
     ]
-
-    # Crea un messaggio con i comandi
     command_list = "\n".join([f"• {command}" for command in commands])
 
     await update.message.reply_text(
         f"Benvenuto in KAN, spero tu sia Nicholas o non sei il benvenuto.\n\n"
     )
 
-    # Imposta i comandi del bot
     commands = [
         ('start', 'Avvia il bot'),
         ('aggiungi_anime', 'Aggiungi un anime'),
@@ -119,46 +114,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         ('stop_bot', 'Arresta il bot')
     ]
     
-    # Usa context.bot invece di update.bot
     await context.bot.set_my_commands(commands)
-
-    
 
 # Funzione per annullare la conversazione
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    logger.info("Operazione annullata dall'utente.")
+    logger.info("Operazione annullata.")
     await update.message.reply_text("Operazione annullata.")
     return ConversationHandler.END
-
-
-
-async def send_message_to_user(app, message: str):
-    """Invia un messaggio all'utente autorizzato tramite il bot."""
-    try:
-        await app.bot.send_message(chat_id=AUTHORIZED_USER_ID, text=message)
-        logger.info(f"Messaggio inviato a {AUTHORIZED_USER_ID}: {message}")
-    except Exception as e:
-        logger.error(f"Errore durante l'invio del messaggio: {e}")
 
 async def lista_anime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if user_id != AUTHORIZED_USER_ID:
-        logger.warning(f"Accesso negato per user_id: {user_id}")
+        logger.warning(f"Accesso negato: {user_id}")
         await update.message.reply_text("Non sei autorizzato a usare questo bot.")
         return
 
-    # Ottieni la lista degli anime
     anime_list = airi.get_anime()
 
     if not anime_list:
         await update.message.reply_text("📭 La lista degli anime è vuota.")
         return
 
-    # Costruisci la lista dei nomi degli anime con link
     anime_text = ""
     for anime in anime_list:
-        name = anime.get("name", "Sconosciuto")  # O cambia 'name' con 'nome' se è diverso nel JSON
+        name = anime.get("name", "Sconosciuto")
         link = anime.get("link", "#")
         anime_text += f"• [{name}]({link})\n"
 
@@ -168,14 +148,12 @@ async def trova_anime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if user_id != AUTHORIZED_USER_ID:
-        logger.warning(f"Accesso negato per user_id: {user_id}")
+        logger.warning(f"Accesso negato: {user_id}")
         await update.message.reply_text("Non sei autorizzato a usare questo bot.")
         return
 
-    # Ottieni il nome dell'anime dal messaggio dell'utente, rimuovendo il comando /trova_anime
     anime_name = update.message.text.replace("/trova_anime", "").strip()
 
-    # Cerca il link dell'anime usando la funzione get_anime_link
     logger.info(f"Nome anime cercato: {anime_name}")
     link = airi.get_anime_link(anime_name)
 
@@ -184,92 +162,84 @@ async def trova_anime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"🎬 Ecco il link per l'anime: {link}")
 
-
-# Funzione per scaricare gli episodi di un anime
 async def download_episodi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if user_id != AUTHORIZED_USER_ID:
-        logger.warning(f"Accesso negato per user_id: {user_id}")
+        logger.warning(f"Accesso negato: {user_id}")
         await update.message.reply_text("Non sei autorizzato a usare questo bot.")
         return
 
-    # Ottieni il nome dell'anime dal messaggio dell'utente, rimuovendo il comando /download_episodi
-    anime_name = update.message.text.replace("/download_episodi", "").strip()
+    logger.info("Attendo il nome dell'anime per il download.")
+    await update.message.reply_text("Per favore, inviami il nome dell'anime di cui vuoi scaricare gli episodi.")
+    return LINK
 
-    # Cerca il link dell'anime usando la funzione get_anime_link
-    logger.info(f"Nome anime per download: {anime_name}")
+async def receive_anime_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.effective_user.id
+    anime_name = update.message.text.strip()
+
+    logger.info(f"Nome anime per download ricevuto: {anime_name}")
     link = airi.get_anime_link(anime_name)
 
     if link == "Anime non trovato.":
         await update.message.reply_text("Non sono riuscito a trovare l'anime. Assicurati che il nome sia corretto.")
+        return LINK  # This will make the bot ask for the anime name again
+
     else:
-        # Inizializza Miko e scarica gli episodi
         miko_instance = miko.Miko()
         miko_instance.loadAnime(link)
 
-        # Informa l'utente che il download è iniziato
-        await update.message.reply_text("Scaricamento degli episodi in corso...")
-        
-        # Avvia il download in background senza bloccare il bot
-        asyncio.create_task(download_task(miko_instance))  # Questo avvierà il task in parallelo
+        await update.message.reply_text("Scaricamento in corso...")
 
-        await update.message.reply_text(f"🎬 Scaricamento degli episodi per l'anime: {link} è in corso."
-                                        "\nControlla la cartella di destinazione per gli episodi scaricati.")
+        if not await download_task(miko_instance):  # Check if the download task returns False
+            await update.message.reply_text(f"🎬 Tutti gli episodi di {anime_name} sono già scaricati.")
+            return ConversationHandler.END  # End the conversation if no episodes need to be downloaded
+        await update.message.reply_text(f"🎬 Tutti gli episodi di {anime_name} sono stati scaricati ")
+        return ConversationHandler.END  # End the conversation when the download starts
 
-# Funzione per gestire il download in background
 async def download_task(miko_instance: miko.Miko):
     try:
-        miko_instance.downloadEpisodes(miko_instance.setupAnimeFolder())
+        anime_folder = miko_instance.setupAnimeFolder()
+        if not anime_folder:  # Check if the list is empty or zero
+            logger.info("Nessun episodio da scaricare. Operazione annullata.")
+            return False
+        miko_instance.downloadEpisodes(anime_folder)
         logger.info("Download completato.")
     except Exception as e:
-        logger.error(f"Errore durante il download: {e}")
+        logger.error(f"Errore download: {e}")
 
 async def check_new_episodes(context: ContextTypes.DEFAULT_TYPE):
-    anime_list = airi.get_anime()  # Get the list of anime
+    miko_instance = miko.Miko()
+    anime_list = airi.get_anime()
     
     for anime_data in anime_list:
-        anime_name = anime_data.get('name')  # Extract the anime name
-        link = anime_data.get('link')  # Extract the anime link
-        last_update = anime_data.get('last_update')  # Extract the last update time
+        anime_name = anime_data.get('name')
+        link = anime_data.get('link')
+        last_update = anime_data.get('last_update')
+        episodi_scaricati = anime_data.get('episodi_scaricati', 0)
         
+        miko_instance.count_and_update_episodes(anime_name, episodi_scaricati)
         if anime_name and link and last_update:
-            # Parse the last update time
             last_update_date = parser.parse(last_update)
             days_since_update = (datetime.datetime.now() - last_update_date).days
             
-            # Check if 7 days have passed since the last update
-            if days_since_update >= 7 and days_since_update < 28:
-                # Create an instance of miko and load the anime
-                miko_instance = miko.Miko()
+            if episodi_scaricati == 0 or (7 <= days_since_update < 28):
                 miko_instance.loadAnime(link)
                 
-                # Check for missing episodes
                 missing_episodes = miko_instance.check_missing_episodes()
 
                 if missing_episodes:
-                    # Handle the case where there are missing episodes
                     await context.bot.send_message(
                         chat_id=AUTHORIZED_USER_ID,
-                        text=f"Missing episodes for {anime_name}. Starting download..."
+                        text=f"Episodi mancanti per {anime_name}. Inizio download..."
                     )
                     await download_new_episodes(anime_name)
                 else:
-                    logger.info(f"All episodes for {anime_name} are up to date.")
+                    logger.info(f"Tutti gli episodi di {anime_name} sono aggiornati.")
             else:
-                logger.info(f"Last update for {anime_name} was {days_since_update} days ago. Skipping check.")
+                logger.info(f"L'ultimo aggiornamento di {anime_name} è {days_since_update} giorni fa. Salto controllo.")
         else:
-            logger.warning(f"Missing 'name', 'link', or 'last_update' in anime data: {anime_data}")
-
-
-# Funzione per gestire il download in background
-async def download_task(miko_instance: miko.Miko):
-    try:
-        miko_instance.downloadEpisodes(miko_instance.setupAnimeFolder())
-        logger.info("Download completato.")
-        
-    except Exception as e:
-        logger.error(f"Errore durante il download: {e}")
+            logger.warning(f"Dati mancanti in {anime_data}")
 
 async def download_new_episodes(anime_name: str):
     link = airi.get_anime_link(anime_name)
@@ -281,64 +251,56 @@ async def download_new_episodes(anime_name: str):
     miko_instance = miko.Miko()
     miko_instance.loadAnime(link)
 
-    # Avvia il download in background
     asyncio.create_task(download_task(miko_instance))  # Avvia il task in parallelo
 
-    logger.info(f"Avviato il download per {anime_name}.")
+    logger.info(f"Avviato download per {anime_name}.")
 
-    
 # Funzione principale per avviare il bot
 def main():
-    # Ottieni il token dal file .env
     TOKEN = os.getenv("TELEGRAM_TOKEN")
     if not TOKEN:
-        logger.error("Il token TELEGRAM_TOKEN non è stato trovato nell'ambiente.")
+        logger.error("Token non trovato.")
         return
 
-    logger.info("Avvio del bot...")
-    # Crea l'applicazione
+    logger.info("Avvio bot...")
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Definisci i CommandHandler per /start e /aggiungi_anime
     start_handler = CommandHandler("start", start)
     aggiungi_anime_handler = CommandHandler("aggiungi_anime", aggiungi_anime)
-    
 
-    # Definisci il ConversationHandler per aggiungere anime
     conversation_handler = ConversationHandler(
         entry_points=[aggiungi_anime_handler],
         states={LINK: [MessageHandler(filters.TEXT, receive_link)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    # Aggiungi gli handler all'applicazione
     app.add_handler(start_handler)
     app.add_handler(conversation_handler)
     app.add_handler(CommandHandler("lista_anime", lista_anime))
     app.add_handler(CommandHandler("trova_anime", trova_anime))
-    app.add_handler(CommandHandler("download_episodi", download_episodi))
+    app.add_handler(ConversationHandler(
+        entry_points=[CommandHandler("download_episodi", download_episodi)],
+        states={
+            LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_anime_name)],
+        },
+        fallbacks=[],
+    ))
     app.add_handler(CommandHandler("stop_bot", stop_bot))
 
-     # Pianifica il controllo ogni ora
     app.job_queue.run_repeating(
         check_new_episodes,
-        interval=airi.UPDATE_TIME,  # 3600 secondi = 1 ora
-        first=datetime.time(0, 0),  # Inizia a mezzanotte
+        interval=airi.UPDATE_TIME,  
+        first=datetime.time(0, 0),
     )
 
-     # Funzione per gestire l'interruzione del server (Ctrl+C)
     def signal_handler(sig, frame):
-        logger.info("Arresto del bot... Interruzione manuale ricevuta.")
+        logger.info("Arresto bot... Interruzione manuale.")
         app.stop()
 
-    # Aggiungi il gestore del segnale SIGINT (Ctrl+C)
     signal.signal(signal.SIGINT, signal_handler)
     
-    # Avvia il bot
-    logger.info("Il bot è in esecuzione.")
+    logger.info("Bot in esecuzione.")
     app.run_polling()
-    
-
 
 if __name__ == "__main__":
     main()

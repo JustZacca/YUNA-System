@@ -11,9 +11,17 @@ from colorama import init
 init(autoreset=True)
 
 # Configura il logging con il custom formatter
+class ColoredFormatterWithClass(ColoredFormatter):
+    def format(self, record):
+        # Coloriamo il nome della classe in base al livello di log
+        classname_color = Fore.CYAN  # Puoi scegliere qualsiasi colore
+        class_name = f"{classname_color}{record.classname}{Style.RESET_ALL}"
+        log_message = super().format(record)
+        return log_message.replace('%(classname)s', class_name)
+
 formatter = ColoredFormatter(
-    fmt="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    fmt="\033[34m%(asctime)s\033[0m - %(levelname)s - %(message)s",  # Make the time blue
+    datefmt="%Y-%m-%d %H:%M:%S"  # Keep the date format
 )
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
@@ -33,38 +41,38 @@ class Miko:
     
     def loadAnime(self, anime_link):
         """
-        Load an anime by its link and save it to self.anime.
+        Carica un anime dal link e lo salva in self.anime.
         """
         try:
-            logger.info(f"Attempting to load anime from link: {anime_link}")
+            logger.info(f"Caricamento anime da link: {anime_link}", extra={"classname": self.__class__.__name__})
             self.anime = aw.Anime(anime_link)
             anime_name = self.anime.getName()
-            logger.info(f"Anime loaded successfully: {anime_name}")
+            logger.info(f"Anime caricato: {anime_name}", extra={"classname": self.__class__.__name__})
             return self.anime
         except Exception as e:
-            logger.error(f"Failed to load anime from link '{anime_link}'. Error: {e}")
+            logger.error(f"Errore nel caricare l'anime dal link '{anime_link}': {e}", extra={"classname": self.__class__.__name__})
             self.anime = None
             return None
         
     def getEpisodes(self):
         """
-        Get all episodes of the loaded anime.
+        Ottieni tutti gli episodi dell'anime caricato.
         """
         if self.anime is None:
-            logger.warning("No anime loaded. Please load an anime first.")
+            logger.warning("Nessun anime caricato. Carica un anime prima.", extra={"classname": self.__class__.__name__})
             return None
         try:
-            logger.info(f"Fetching episodes for anime: {self.anime.getName()}")
+            logger.info(f"Recupero episodi per l'anime: {self.anime.getName()}", extra={"classname": self.__class__.__name__})
             episodes = self.anime.getEpisodes()
-            logger.info(f"Retrieved {len(episodes)} episodes.")
+            logger.info(f"{len(episodes)} episodi recuperati.", extra={"classname": self.__class__.__name__})
             return episodes
         except Exception as e:
-            logger.error(f"Failed to fetch episodes for anime '{self.anime.getName()}'. Error: {e}")
+            logger.error(f"Errore nel recupero episodi per l'anime '{self.anime.getName()}': {e}", extra={"classname": self.__class__.__name__})
             return None
 
     def setupAnimeFolder(self):
         if self.anime is None:
-            logger.warning("No anime loaded.")
+            logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
             return []
 
         anime_name = self.anime.getName()
@@ -72,81 +80,110 @@ class Miko:
 
         if not os.path.exists(self.anime_folder):
             os.makedirs(self.anime_folder)
-            logger.info(f"Created folder: {self.anime_folder}")
+            logger.info(f"Cartella creata: {self.anime_folder}", extra={"classname": self.__class__.__name__})
             episodes = self.anime.getEpisodes()
-            logger.info(f"Total episodes to download: {len(episodes)}")
+            logger.info(f"Totale episodi da scaricare: {len(episodes)}", extra={"classname": self.__class__.__name__})
             return [ep.number for ep in episodes]
 
-        # Trova gli episodi già presenti
-        existing_files = os.listdir(self.anime_folder)
-        episode_pattern = re.compile(rf"{re.escape(anime_name)} - Episode (\d+)\.mp4")
+        normalized_anime_name = self.normalize_name(anime_name)
 
-        existing_numbers = {
-            int(match.group(1))
-            for f in existing_files
-            for match in [episode_pattern.match(f)]
-            if match
-        }
+        existing_files = os.listdir(self.anime_folder)
+        existing_numbers = set()
+
+        for f in existing_files:
+            match = re.match(rf".*Episode\s+(\d+)\.mp4", f, re.IGNORECASE)
+            if match:
+                existing_numbers.add(int(match.group(1)))
 
         total_episodes = self.anime.getEpisodes()
-        missing = [int(ep.number) for ep in total_episodes if int(ep.number) not in existing_numbers]
+        if total_episodes is None:
+            logger.warning(f"Errore nel recupero episodi per {anime_name}.", extra={"classname": self.__class__.__name__})
+            return []
 
-        logger.info(f"Found {len(existing_numbers)} episode(s) already downloaded.")
-        logger.info(f"{len(missing)} episode(s) still missing: {missing}")
-        
+        total_numbers = {int(ep.number) for ep in total_episodes}
+
+        missing = total_numbers - existing_numbers
+
+        logger.info(f"Trovati {len(existing_numbers)} episodi già scaricati.", extra={"classname": self.__class__.__name__})
+        logger.info(f"{len(missing)} episodi mancanti: {missing}", extra={"classname": self.__class__.__name__})
+
         return missing
     
+    def normalize_name(self,name):
+        return re.sub(r'[^a-zA-Z0-9]', '', name).lower()
+
     def check_missing_episodes(self):
         if self.anime is None:
-            logger.warning("No anime loaded.")
+            logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
             return []
 
         anime_name = self.anime.getName()
         self.anime_folder = os.path.join(self.airi.get_destination_folder(), anime_name)
 
-        # Check if the anime folder exists, if not, create it
         if not os.path.exists(self.anime_folder):
-            logger.warning(f"Folder for {anime_name} does not exist. Creating the folder...")
-            os.makedirs(self.anime_folder)  # Create the directory
-            logger.info(f"Created folder: {self.anime_folder}")
+            logger.warning(f"Cartella per {anime_name} non esiste. Creando la cartella...", extra={"classname": self.__class__.__name__})
+            os.makedirs(self.anime_folder)
+            logger.info(f"Cartella creata: {self.anime_folder}", extra={"classname": self.__class__.__name__})
 
-        # Trova gli episodi già presenti
+        normalized_anime_name = self.normalize_name(anime_name)
+
         existing_files = os.listdir(self.anime_folder)
-        episode_pattern = re.compile(rf"{re.escape(anime_name)} - Episode (\d+)\.mp4")
+        existing_numbers = set()
 
-        existing_numbers = {
-            int(match.group(1))
-            for f in existing_files
-            for match in [episode_pattern.match(f)]
-            if match
-        }
+        for f in existing_files:
+            match = re.match(rf".*Episode\s+(\d+)\.mp4", f, re.IGNORECASE)
+            if match:
+                existing_numbers.add(int(match.group(1)))
 
-        # Get the list of total episodes using getEpisodes() method
-        total_episodes = self.anime.getEpisodes()  # Use getEpisodes() instead of accessing 'episodes' directly
+        total_episodes = self.anime.getEpisodes()
         if total_episodes is None:
-            logger.warning(f"Failed to fetch episodes for {anime_name}.")
+            logger.warning(f"Errore nel recupero episodi per {anime_name}.", extra={"classname": self.__class__.__name__})
             return []
 
         total_numbers = {int(ep.number) for ep in total_episodes}
 
-        # Verifica se il numero di episodi nella cartella è diverso da quello totale
         missing = total_numbers - existing_numbers
         extra = existing_numbers - total_numbers
 
-        logger.info(f"Found {len(existing_numbers)} episode(s) already downloaded.")
-        logger.info(f"{len(missing)} episode(s) still missing: {missing}")
-        logger.info(f"{len(extra)} extra episode(s) found: {extra}")
+        logger.info(f"Trovati {len(existing_numbers)} episodi già scaricati.", extra={"classname": self.__class__.__name__})
+        logger.info(f"{len(missing)} episodi mancanti: {missing}", extra={"classname": self.__class__.__name__})
+        logger.info(f"{len(extra)} episodi extra trovati: {extra}", extra={"classname": self.__class__.__name__})
 
-        if missing or extra:
+        self.airi.update_downloaded_episodes(anime_name, len(existing_numbers))
+
+        return bool(missing or extra)
+
+    def count_and_update_episodes(self, anime_name, episodi_scaricati):
+        """
+        Conta gli episodi scaricati per un dato anime e aggiorna il conteggio in Airi.
+        """
+        self.anime_folder = os.path.join(self.airi.get_destination_folder(), anime_name)
+
+        if not os.path.exists(self.anime_folder):
+            logger.warning(f"Cartella per {anime_name} non esiste.", extra={"classname": self.__class__.__name__})
+            return False
+
+        existing_files = os.listdir(self.anime_folder)
+        existing_numbers = set()
+
+        for f in existing_files:
+            match = re.match(rf".*Episode\s+(\d+)\.mp4", f, re.IGNORECASE)
+            if match:
+                existing_numbers.add(int(match.group(1)))
+
+        logger.info(f"Trovati {len(existing_numbers)} episodi scaricati per '{anime_name}'.", extra={"classname": self.__class__.__name__})
+
+        if len(existing_numbers) == episodi_scaricati:
+            logger.info(f"Tutti gli episodi per '{anime_name}' sono già aggiornati. Nessun aggiornamento necessario.", extra={"classname": self.__class__.__name__})
             return True
-        return False
 
+        self.airi.update_downloaded_episodes(anime_name, len(existing_numbers))
 
-
+        return True
 
     def downloadEpisodes(self, episode_list):
         if self.anime is None:
-            logger.warning("No anime loaded.")
+            logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
             return False
 
         anime_name = self.anime.getName()
@@ -154,19 +191,19 @@ class Miko:
         try:
             episodes = self.anime.getEpisodes(episode_list) 
         except Exception as e:
-            logger.error(f"Could not retrieve specified episodes. Error: {e}")
+            logger.error(f"Impossibile recuperare gli episodi specificati. Errore: {e}", extra={"classname": self.__class__.__name__})
             return False
 
-        logger.info(f"Starting download of {len(episodes)} episodes...\n")
+        logger.info(f"Inizio download di {len(episodes)} episodi...\n", extra={"classname": self.__class__.__name__})
 
-        for ep in tqdm(episodes, desc="Downloading episodes", unit="ep", colour="cyan"):
+        for ep in tqdm(episodes, desc="Scaricando episodi", unit="ep", colour="cyan"):
             try:
                 ep.download(title=f"{anime_name} - Episode {ep.number}", folder=self.anime_folder)
             except Exception as e:
-                tqdm.write(f"[ERROR] Episode {ep.number} failed. Error: {e}")
+                tqdm.write(f"[ERRORE] Episodio {ep.number} fallito. Errore: {e}")
                 continue
 
-        logger.info("Finished downloading requested episodes.")
+        logger.info("Download degli episodi completato.", extra={"classname": self.__class__.__name__})
         return True
     
     def addAnime(self, link):
@@ -177,5 +214,5 @@ class Miko:
         anime_name = self.anime.getName()
         episodes = self.anime.getEpisodes()
         last_episode_info = episodes[-1].fileInfo()
-        last_modified = last_episode_info.get("last_modified", "Unknown")
+        last_modified = last_episode_info.get("last_modified", "Sconosciuto")
         self.airi.add_anime(anime_name, link, last_modified)
