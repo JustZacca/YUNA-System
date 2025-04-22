@@ -43,23 +43,24 @@ class Miko:
         self.aw = aw
         self.aw.SES.base_url = self.airi.BASE_URL
         self.jellyfin = JellyfinClient.JellyfinClient()  # Initialize the client correctly
+        self.anime_name = None  # Variabile d’istanza per salvare il nome dell'anime
     
-    def loadAnime(self, anime_link):
+    async def loadAnime(self, anime_link):
         """
         Carica un anime dal link e lo salva in self.anime.
         """
         try:
-            logger.info(f"Caricamento anime da link: {anime_link}", extra={"classname": self.__class__.__name__})
             self.anime = self.aw.Anime(anime_link)
-            anime_name = self.anime.getName()
-            logger.info(f"Anime caricato: {anime_name}", extra={"classname": self.__class__.__name__})
+            self.anime_name = self.anime.getName()
+            logger.info(f"Anime caricato: {self.anime_name}", extra={"classname": self.__class__.__name__})
+            await self.setupAnimeFolder()
             return self.anime
         except Exception as e:
             logger.error(f"Errore nel caricare l'anime dal link '{anime_link}': {e}", extra={"classname": self.__class__.__name__})
             self.anime = None
             return None
         
-    def getEpisodes(self):
+    async def getEpisodes(self):
         """
         Ottieni tutti gli episodi dell'anime caricato.
         """
@@ -75,22 +76,32 @@ class Miko:
             logger.error(f"Errore nel recupero episodi per l'anime '{self.anime.getName()}': {e}", extra={"classname": self.__class__.__name__})
             return None
 
-    def setupAnimeFolder(self):
+    async def setupAnimeFolder(self):
+        if self.anime is None:
+            logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
+            return False
+
+        self.anime_folder = os.path.join(self.airi.get_destination_folder(), self.anime_name)
+
+        if not os.path.exists(self.anime_folder):
+            try:
+                os.makedirs(self.anime_folder)
+                logger.info(f"Cartella creata: {self.anime_folder}", extra={"classname": self.__class__.__name__})
+                return True
+            except Exception as e:
+                logger.error(f"Errore nella creazione della cartella {self.anime_folder}: {e}", extra={"classname": self.__class__.__name__})
+                return False
+        return True
+
+    async def getMissingEpisodes(self):
         if self.anime is None:
             logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
             return []
 
-        anime_name = self.anime.getName()
-        self.anime_folder = os.path.join(self.airi.get_destination_folder(), anime_name)
-
-        if not os.path.exists(self.anime_folder):
-            os.makedirs(self.anime_folder)
-            logger.info(f"Cartella creata: {self.anime_folder}", extra={"classname": self.__class__.__name__})
-            episodes = self.anime.getEpisodes()
-            logger.info(f"Totale episodi da scaricare: {len(episodes)}", extra={"classname": self.__class__.__name__})
-            return [ep.number for ep in episodes]
-
-        normalized_anime_name = self.normalize_name(anime_name)
+        episodes = self.anime.getEpisodes()
+        if episodes is None:
+            logger.warning(f"Errore nel recupero episodi per {self.anime_name}.", extra={"classname": self.__class__.__name__})
+            return []
 
         existing_files = os.listdir(self.anime_folder)
         existing_numbers = set()
@@ -100,37 +111,31 @@ class Miko:
             if match:
                 existing_numbers.add(int(match.group(1)))
 
-        total_episodes = self.anime.getEpisodes()
-        if total_episodes is None:
-            logger.warning(f"Errore nel recupero episodi per {anime_name}.", extra={"classname": self.__class__.__name__})
-            return []
-
-        total_numbers = {int(ep.number) for ep in total_episodes}
+        total_numbers = {int(ep.number) for ep in episodes}
 
         missing = total_numbers - existing_numbers
+        self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
 
-        logger.info(f"Trovati {len(existing_numbers)} episodi già scaricati.", extra={"classname": self.__class__.__name__})
-        logger.info(f"{len(missing)} episodi mancanti: {missing}", extra={"classname": self.__class__.__name__})
+        logger.info(f"Trovati {len(existing_numbers)} episodi già scaricati. Ne mancano {len(missing)}", extra={"classname": self.__class__.__name__})
 
         return missing
     
     def normalize_name(self,name):
         return re.sub(r'[^a-zA-Z0-9]', '', name).lower()
 
-    def check_missing_episodes(self):
+    async def check_missing_episodes(self):
         if self.anime is None:
             logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
             return []
 
-        anime_name = self.anime.getName()
-        self.anime_folder = os.path.join(self.airi.get_destination_folder(), anime_name)
+        self.anime_folder = os.path.join(self.airi.get_destination_folder(), self.anime_name)
 
         if not os.path.exists(self.anime_folder):
-            logger.warning(f"Cartella per {anime_name} non esiste. Creando la cartella...", extra={"classname": self.__class__.__name__})
+            logger.warning(f"Cartella per {self.anime_name} non esiste. Creando la cartella...", extra={"classname": self.__class__.__name__})
             os.makedirs(self.anime_folder)
             logger.info(f"Cartella creata: {self.anime_folder}", extra={"classname": self.__class__.__name__})
 
-        normalized_anime_name = self.normalize_name(anime_name)
+        normalized_anime_name = self.normalize_name(self.anime_name)
 
         existing_files = os.listdir(self.anime_folder)
         existing_numbers = set()
@@ -142,7 +147,7 @@ class Miko:
 
         total_episodes = self.anime.getEpisodes()
         if total_episodes is None:
-            logger.warning(f"Errore nel recupero episodi per {anime_name}.", extra={"classname": self.__class__.__name__})
+            logger.warning(f"Errore nel recupero episodi per {self.anime_name}.", extra={"classname": self.__class__.__name__})
             return []
 
         total_numbers = {int(ep.number) for ep in total_episodes}
@@ -151,10 +156,12 @@ class Miko:
         extra = existing_numbers - total_numbers
 
         logger.info(f"Trovati {len(existing_numbers)} episodi già scaricati.", extra={"classname": self.__class__.__name__})
-        logger.info(f"{len(missing)} episodi mancanti: {missing}", extra={"classname": self.__class__.__name__})
-        logger.info(f"{len(extra)} episodi extra trovati: {extra}", extra={"classname": self.__class__.__name__})
+        if missing:
+            logger.info(f"{len(missing)} episodi mancanti: {missing}", extra={"classname": self.__class__.__name__})
+        if extra:
+            logger.info(f"{len(extra)} episodi extra trovati: {extra}", extra={"classname": self.__class__.__name__})
 
-        self.airi.update_downloaded_episodes(anime_name, len(existing_numbers))
+        self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
 
         return bool(missing or extra)
 
@@ -208,8 +215,6 @@ class Miko:
             logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
             return False
 
-        anime_name = self.anime.getName()
-
         try:
             episodes = self.anime.getEpisodes(episode_list)
         except Exception as e:
@@ -221,7 +226,7 @@ class Miko:
         for ep in episodes:
             try:
                 # Aggiungi l'hook per visualizzare il progresso del download
-                ep.download(title=f"{anime_name} - Episode {ep.number}", folder=self.anime_folder, hook=self.my_hook)
+                ep.download(title=f"{self.anime_name} - Episode {ep.number}", folder=self.anime_folder, hook=self.my_hook)
                 self.jellyfin.trigger_scan()
             except Exception as e:
                 logger.error(f"[ERRORE] Episodio {ep.number} fallito. Errore: {e}", extra={"classname": self.__class__.__name__})
@@ -230,16 +235,21 @@ class Miko:
         logger.info("Download degli episodi completato.", extra={"classname": self.__class__.__name__})
         return True
         
-    def addAnime(self, link):
+    async def addAnime(self, link):
         """
         Aggiunge un nuovo anime al file config.json.
         """
-        self.loadAnime(link)
-        anime_name = self.anime.getName()
+        await self.loadAnime(link)
         episodes = self.anime.getEpisodes()
         last_episode_info = episodes[-1].fileInfo()
         last_modified = last_episode_info.get("last_modified", "Sconosciuto")
-        self.airi.add_anime(anime_name, link, last_modified)
+        
+        if not await self.setupAnimeFolder():
+            logger.error("Impossibile configurare la cartella dell'anime. Operazione fallita.", extra={"classname": self.__class__.__name__})
+            return None
+        
+        self.airi.add_anime(self.anime_name, link, last_modified, len(episodes))
+        return self.anime_name
         
     def findAnime(self, anime_name):
         """

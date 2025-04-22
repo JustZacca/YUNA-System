@@ -7,6 +7,7 @@ from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter d
 from colorama import init
 import re
 from urllib.parse import urlparse
+import time
 
 init(autoreset=True)
 
@@ -20,6 +21,9 @@ handler.setFormatter(formatter)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(handler)
+_config = None
+_config_timestamp = 0
+_config_ttl = 0.1  # 100 ms (puoi cambiare il valore)
 
 class Airi:
     def __init__(self):
@@ -29,9 +33,7 @@ class Airi:
         self.telegram_token = os.getenv("TELEGRAM_TOKEN")
         self.TELEGRAM_CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
         self.UPDATE_TIME = int(os.getenv("UPDATE_TIME", 60))  # Default a 60 secondi se non impostato
-        self.BASE_URL = os.getenv("BASE_URL", "https://www.animeworld.ac")
-        logger.info(f"Configurazione caricata: destination_folder={self.destination_folder}")
-        
+        self.BASE_URL = os.getenv("BASE_URL", "https://www.animeworld.ac")        
         self.config_path = "config.json"
         self.config = self.load_or_create_config()
         
@@ -42,11 +44,16 @@ class Airi:
         if not self.destination_folder:
             raise ValueError("La cartella di destinazione non è impostata nell'ambiente.")
         return self.destination_folder
-    
     def load_or_create_config(self):
         """
         Carica il file config.json se esiste, altrimenti lo crea vuoto.
+        In caso di errore, rinomina la vecchia configurazione e crea una nuova configurazione vuota.
         """
+        global _config, _config_timestamp
+        now = time.time()
+        if _config is not None and (now - _config_timestamp) < _config_ttl:
+            return _config
+
         if not os.path.exists(self.config_path):
             logger.info(f"{self.config_path} non trovato. Creazione di una configurazione vuota.")
             # Creazione di una configurazione vuota
@@ -56,28 +63,47 @@ class Airi:
             with open(self.config_path, "w") as config_file:
                 json.dump(default_config, config_file, indent=4)
             logger.info(f"{self.config_path} creato con lista anime vuota.")
+            _config_timestamp = now
             return default_config
 
         # Se il file esiste, carica il contenuto
-        with open(self.config_path, "r") as config_file:
-            config = json.load(config_file)
-        logger.info(f"{self.config_path} caricato.")
+        try:
+            with open(self.config_path, "r") as config_file:
+                config = json.load(config_file)
+                if not config:  # Controlla se il file è vuoto
+                    raise ValueError("Il file config.json è vuoto.")
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Errore nella lettura di {self.config_path}: {e}. Rinominando il file e creando una nuova configurazione vuota.")
+            # Rinomina il file corrotto
+            corrupted_path = f"{self.config_path}.corrupted_{int(time.time())}"
+            os.rename(self.config_path, corrupted_path)
+            logger.info(f"File corrotto rinominato in {corrupted_path}. Backup creato con successo.")
+            # Creazione di una configurazione vuota
+            config = {
+                "anime": []
+            }
+            with open(self.config_path, "w") as config_file:
+                json.dump(config, config_file, indent=4)
+            logger.info(f"{self.config_path} ripristinato con lista anime vuota.")
+        else:
+            logger.info(f"{self.config_path} caricato correttamente.")
+        
+        _config = config
+        _config_timestamp = now
         return config
     
     def get_anime(self):
         """
         Ritorna la lista degli anime presenti nel config.
         """
-        self.reload_config()
+        self.load_or_create_config()  # Assicurati che la configurazione sia caricata
         return self.config.get("anime", [])
     
 
-    def add_anime(self, name, link, last_update):
+    def add_anime(self, name, link, last_update, numero_episodi):
         """
         Aggiunge un nuovo anime al file config.json se non esiste già un anime con lo stesso link.
         """
-        self.reload_config()
-
         # Rimuove il base URL, mantiene solo il path (es: /play/nome-anime.xyz)
         parsed_link = urlparse(link).path
 
@@ -92,7 +118,8 @@ class Airi:
             "name": name,
             "link": parsed_link,
             "last_update": last_update.strftime("%Y-%m-%d %H:%M:%S"),
-            "episodi_scaricati": 0
+            "episodi_scaricati": 0,
+            "numero_episodi":numero_episodi
         }
         self.config["anime"].append(anime)
 
@@ -101,14 +128,15 @@ class Airi:
             json.dump(self.config, config_file, indent=4)
         logger.info(f"Anime '{name}' aggiunto alla configurazione.")
         logger.debug(f"Configurazione aggiornata: {json.dumps(self.config, indent=4)}")
+        self.invalidate_config()
+        self.load_or_create_config()
+        return
         
         
     def update_downloaded_episodes(self, name, episodi_scaricati):
         """
         Aggiorna la data di download dell'anime nel file config.json.
         """
-        self.reload_config()
-
         # Trova l'anime da aggiornare
         for anime in self.config["anime"]:
             if anime.get("name") == name:
@@ -119,21 +147,15 @@ class Airi:
                 logger.info(f"Episodi scaricati aggiornati per l'anime '{name}'.")
                 return
         logger.warning(f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
+        self.invalidate_config()
         # Se non viene trovato alcun anime con quel nome, non fare nulla
-        
-        
-    def reload_config(self):
-        """
-        Ricarica il file di configurazione.
-        """
-        self.config = self.load_or_create_config()
-        logger.info(f"Configurazione ricaricata.")
         
     def get_anime_link(self, anime_name):
         """
         Restituisce il link dell'anime in base al nome (anche parziale) usando una regex.
         La ricerca è insensibile al maiuscolo/minuscolo.
         """
+        self.load_or_create_config()  # Assicurati che la configurazione sia caricata
         # Pulisci il nome dell'anime per evitare errori con spazi e caratteri speciali
         anime_name = anime_name.strip().lower()  # Normalizza il nome dell'anime in minuscolo
         logger.debug(f"Nome anime normalizzato per la ricerca: '{anime_name}'")
@@ -158,3 +180,9 @@ class Airi:
         # Se non viene trovato alcun match, restituisci un messaggio di errore
         logger.debug(f"Nessun match trovato per anime_name: '{anime_name}'")
         return "Anime non trovato."
+
+    def invalidate_config(self):
+        global _config, _config_timestamp
+        logger.info("Config invalidato")
+        _config = None
+        _config_timestamp = 0
