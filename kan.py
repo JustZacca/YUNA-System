@@ -257,7 +257,7 @@ class Kan:
 
 
 
-    # Function to check and download missing episodes
+        # Function to check and download missing episodes
     async def download_episodi(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
 
@@ -266,37 +266,55 @@ class Kan:
             await update.message.reply_text("Non sei autorizzato a usare questo bot.")
             return
 
-        self.logger.info("Attendo il nome dell'anime per il download.")
-        await update.message.reply_text("Per favore, inviami il nome dell'anime di cui vuoi scaricare gli episodi.")
-        return self.LINK
+        anime_list = self.airi.get_anime()
+        if not anime_list:
+            await update.message.reply_text("📭 La lista degli anime è vuota.")
+            return
+
+        keyboard = []
+        for anime in anime_list:
+            name = anime.get("name", "Sconosciuto")
+            link = anime.get("link")
+            keyboard.append([InlineKeyboardButton(name, callback_data=f"download_anime|{link}")])
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("Seleziona l'anime da scaricare:", reply_markup=reply_markup)
 
 
-    async def receive_anime_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        user_id = update.effective_user.id
-        anime_name = update.message.text.strip()
+    async def handle_anime_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
 
-        self.logger.info(f"Nome anime per download ricevuto: {anime_name}")
-        link = self.airi.get_anime_link(anime_name)
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            self.logger.warning(f"Accesso negato: {user_id}")
+            await query.edit_message_text("Non sei autorizzato a usare questo bot.")
+            return
 
-        if link == "Anime non trovato.":
-            await update.message.reply_text("Non sono riuscito a trovare l'anime. Assicurati che il nome sia corretto.")
-            return self.LINK  # This will make the bot ask for the anime name again
+        data = query.data
+        if not data.startswith("download_anime|"):
+            return
 
+        link = data.split("|")[1]
+        self.logger.info(f"Anime selezionato per il download: {link}")
+
+        await self.miko_instance.loadAnime(link)
+        self.missing_episodes_list = await self.miko_instance.getMissingEpisodes()
+
+        if len(self.missing_episodes_list) == 0:
+            await query.edit_message_text("✅ Tutti gli episodi sono già scaricati. La serie è completa!")
+            return
+
+        if len(self.missing_episodes_list) == 1:
+            await query.edit_message_text("🎬 Manca 1 episodio di "+self.miko_instance.anime_name+" Inizio download...")
         else:
-            await self.miko_instance.loadAnime(link)
-            self.missing_episodes_list = await self.miko_instance.getMissingEpisodes()
+            await query.edit_message_text(f"🎬 Mancano {len(self.missing_episodes_list)} episodi di "+self.miko_instance.anime_name+". Inizio download...")
+        if not await self.download_task():
+            await context.bot.send_message(chat_id=query.message.chat_id, text="❌ Si è verificato un errore durante il download degli episodi.")
+            return
 
-            if len(self.missing_episodes_list) == 0:
-                await update.message.reply_text(f"🎬 Tutti gli episodi di {anime_name} sono già scaricati. La serie è completa!")
-                return ConversationHandler.END  # End the conversation if no episodes need to be downloaded
+        await context.bot.send_message(chat_id=query.message.chat_id, text="✅ Tutti gli episodi sono stati scaricati con successo!")
 
-            await update.message.reply_text("Scaricamento in corso...")
-            if not await self.download_task():  # Check if the download task returns False
-                await update.message.reply_text(f"❌ Si è verificato un errore durante il download degli episodi.")
-                return ConversationHandler.END  # End the conversation if the download fails
-
-            await update.message.reply_text(f"🎬 Tutti gli episodi di {anime_name} sono stati scaricati con successo!")
-            return ConversationHandler.END  # End the conversation when the download completes
 
 
     async def download_task(self):
@@ -336,10 +354,10 @@ class Kan:
                 self.logger.info(f"{anime_name} non ha tutti gli episodi. Procedo con il controllo.")
                 await context.bot.send_message(
                     chat_id=self.AUTHORIZED_USER_ID,
-                    text=f"{anime_name} Non ha tutti gli episodi."
+                    text=f"{anime_name} Non ha tutti gli episodi. 😅"
                 )
             elif 7 <= days_since_update < 21:
-                self.logger.info(f"Potrebbero esserci nuovi episodi per {anime_name}. Procedo con il controllo.")
+                self.logger.info(f"Potrebbero esserci nuovi episodi per {anime_name}. Procedo con il controllo. 🤩")
                 isNuovoEpisodio = True
             elif episodi_scaricati == numero_episodi:
                 self.logger.info(f"{anime_name} è aggiornato. Salto controllo.")
@@ -434,14 +452,9 @@ class Kan:
             },
             fallbacks=[],
         )
-        app.add_handler(ConversationHandler(
-            entry_points=[CommandHandler("download_episodi", self.download_episodi)],
-            states={
-                self.LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.receive_anime_name)],
-            },
-            fallbacks=[],
-        ))
-
+       
+        app.add_handler(CommandHandler("download_episodi", self.download_episodi))
+        app.add_handler(CallbackQueryHandler(self.handle_anime_selection, pattern=r"^download_anime\|"))
         app.add_handler(CallbackQueryHandler(self.handle_inline_button, pattern="^anime_"))
         app.add_handler(CallbackQueryHandler(self.handle_search_decision, pattern="^(search_more|cancel_search)$"))
         app.add_handler(start_handler)

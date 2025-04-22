@@ -115,6 +115,7 @@ class Miko:
 
         missing = total_numbers - existing_numbers
         self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
+        self.airi.update_episodes_number(self.anime_name, len(total_numbers))
 
         logger.info(f"Trovati {len(existing_numbers)} episodi già scaricati. Ne mancano {len(missing)}", extra={"classname": self.__class__.__name__})
 
@@ -162,6 +163,7 @@ class Miko:
             logger.info(f"{len(extra)} episodi extra trovati: {extra}", extra={"classname": self.__class__.__name__})
 
         self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
+        self.airi.update_episodes_number(self.anime_name, len(total_numbers))
 
         return bool(missing or extra)
 
@@ -230,11 +232,18 @@ class Miko:
                 self.jellyfin.trigger_scan()
                 last_modified = ep.fileInfo().get("last_modified", "Sconosciuto")
                 self.airi.update_last_update(self.anime_name, last_modified)
+                
             except Exception as e:
                 logger.error(f"[ERRORE] Episodio {ep.number} fallito. Errore: {e}", extra={"classname": self.__class__.__name__})
                 continue
 
         logger.info("Download degli episodi completato.", extra={"classname": self.__class__.__name__})
+        try:
+            episode_number = int(float(episodes[-1].number))
+        except (ValueError, TypeError) as e:
+            logger.error(f"Errore nel cast del numero dell'episodio: {e}", extra={"classname": self.__class__.__name__})
+            episode_number = 0  # Default value or handle appropriately
+        self.airi.update_downloaded_episodes(self.anime_name, episode_number)
         return True
         
     async def addAnime(self, link):

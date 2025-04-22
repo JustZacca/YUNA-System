@@ -133,7 +133,7 @@ class Airi:
         return
         
         
-    def update_downloaded_episodes(self, name, episodi_scaricati):
+    def update_downloaded_episodes(self, name, episodi_scaricati: int):
         """
         Aggiorna la data di download dell'anime nel file config.json.
         """
@@ -144,7 +144,24 @@ class Airi:
                 # Scrittura nel file config.json
                 with open(self.config_path, "w") as config_file:
                     json.dump(self.config, config_file, indent=4)
-                logger.info(f"Episodi scaricati aggiornati per l'anime '{name}'.")
+                logger.info(f"Numero di episodi scaricati aggiornato per l'anime '{name}'.")
+                return
+        logger.warning(f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
+        self.invalidate_config()
+        # Se non viene trovato alcun anime con quel nome, non fare nulla
+    
+    def update_episodes_number(self, name, numero_episodi):
+        """
+        Aggiorna la data di download dell'anime nel file config.json.
+        """
+        # Trova l'anime da aggiornare
+        for anime in self.config["anime"]:
+            if anime.get("name") == name:
+                anime['numero_episodi'] = numero_episodi
+                # Scrittura nel file config.json
+                with open(self.config_path, "w") as config_file:
+                    json.dump(self.config, config_file, indent=4)
+                logger.info(f"Numero episodi totale aggiornato per l'anime '{name}'.")
                 return
         logger.warning(f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
         self.invalidate_config()
