@@ -357,7 +357,7 @@ class Kan:
             else:
                 self.logger.info(f"Tutti gli episodi di {anime_name} sono aggiornati.")
         self.logger.info("Controllo episodi completato.")
-        context.bot.send_message(
+        await context.bot.send_message(
             chat_id=self.AUTHORIZED_USER_ID,
             text="Controllo episodi completato. Tutti gli anime sono aggiornati. ✅"
         )
