@@ -113,7 +113,6 @@ class Miko:
 
         #TODO: Aggiunere il supporto ai numeri decimali esempio Berserk 2 episodio 9.5
         total_numbers = {int(float(ep.number)) for ep in episodes if ep.number.isdigit() or re.match(r'^\d+(\.\d+)*$', ep.number)}
-        print(f"Numeri esistenti: {total_numbers}")
 
         missing = total_numbers - existing_numbers
         self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
