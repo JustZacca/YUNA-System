@@ -271,14 +271,10 @@ class Kan:
             return
 
         keyboard = []
-        context.user_data["anime_links"] = {}
 
-        for idx, anime in enumerate(anime_list):
+        for anime in anime_list:
             name = anime.get("name", "Sconosciuto")
-            link = anime.get("link")
-            callback_id = f"anime_{idx}"
-            context.user_data["anime_links"][callback_id] = link
-            keyboard.append([InlineKeyboardButton(name, callback_data=callback_id)])
+            keyboard.append([InlineKeyboardButton(name, callback_data=f"download_anime|{name}")])
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text("Seleziona l'anime da scaricare:", reply_markup=reply_markup)
@@ -299,7 +295,14 @@ class Kan:
         if not data.startswith("download_anime|"):
             return
 
-        link = data.split("|")[1]
+        anime_name = data.split("|", 1)[1]
+        self.logger.info(f"Nome anime selezionato: {anime_name}")
+
+        link = self.airi.get_anime_link(anime_name)
+        if link == "Anime non trovato.":
+            await query.edit_message_text("❌ Non sono riuscito a trovare l'anime.")
+            return
+
         self.logger.info(f"Anime selezionato per il download: {link}")
 
         await self.miko_instance.loadAnime(link)
@@ -310,14 +313,16 @@ class Kan:
             return
 
         if len(self.missing_episodes_list) == 1:
-            await query.edit_message_text("🎬 Manca 1 episodio di "+self.miko_instance.anime_name+" Inizio download...")
+            await query.edit_message_text(f"🎬 Manca 1 episodio di {self.miko_instance.anime_name}. Inizio download...")
         else:
-            await query.edit_message_text(f"🎬 Mancano {len(self.missing_episodes_list)} episodi di "+self.miko_instance.anime_name+". Inizio download...")
+            await query.edit_message_text(f"🎬 Mancano {len(self.missing_episodes_list)} episodi di {self.miko_instance.anime_name}. Inizio download...")
+
         if not await self.download_task():
             await context.bot.send_message(chat_id=query.message.chat_id, text="❌ Si è verificato un errore durante il download degli episodi.")
             return
 
         await context.bot.send_message(chat_id=query.message.chat_id, text="✅ Tutti gli episodi sono stati scaricati con successo!")
+
 
 
 
