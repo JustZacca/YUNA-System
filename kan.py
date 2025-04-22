@@ -262,7 +262,6 @@ class Kan:
         user_id = update.effective_user.id
 
         if user_id != self.AUTHORIZED_USER_ID:
-            self.logger.warning(f"Accesso negato: {user_id}")
             await update.message.reply_text("Non sei autorizzato a usare questo bot.")
             return
 
@@ -272,13 +271,18 @@ class Kan:
             return
 
         keyboard = []
-        for anime in anime_list:
+        context.user_data["anime_links"] = {}
+
+        for idx, anime in enumerate(anime_list):
             name = anime.get("name", "Sconosciuto")
             link = anime.get("link")
-            keyboard.append([InlineKeyboardButton(name, callback_data=f"download_anime|{link}")])
+            callback_id = f"anime_{idx}"
+            context.user_data["anime_links"][callback_id] = link
+            keyboard.append([InlineKeyboardButton(name, callback_data=callback_id)])
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text("Seleziona l'anime da scaricare:", reply_markup=reply_markup)
+
 
 
     async def handle_anime_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
