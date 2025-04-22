@@ -20,19 +20,18 @@ Ecco una versione migliorata e più leggibile del tuo documento Markdown, Lord N
 
 # 🎯 Obiettivo del Progetto
 
-**YUNA* è progettato per affrontare un problema specific:
+**YUNA* è progettato per affrontare un problema specific:
 
- Automatizzare il processo di download e aggiornamento degli anime su un server Jellyfin, integrando il tutto con Telegram per una gestione semplice e immediat.
+ Automatizzare il processo di download e aggiornamento degli anime su un server Jellyfin, integrando il tutto con Telegram per una gestione semplice e immediat.
 
 ---
 
 # 🛠️ Funzionalità Principali
 
-- 🔄 **Aggiornamento Automatico*: Controllo periodico per nuovi episodi e aggiornamento della libreia.
-- 📱 **Gestione via Telegra**: Aggiunta e gestione degli anime direttamente dal tuo account Teleram.
-- 🔔 **Notifiche in Tempo Reae**: Ricevi avvisi quando nuovi episodi sono disponibili e vengono scarcati.
-- 🔃 **Refresh Automatico di Jellyin**: Ogni nuovo episodio scaricato aggiorna automaticamente la libreria su tutti i dispoitivi.
+- 🔄 **Aggiornamento Automatico*: Controllo periodico per nuovi episodi e aggiornamento della libreia.
+- 📱 **Gestione via Telegra**: Aggiunta e gestione degli anime direttamente dal tuo account Teleram.
+- 🔔 **Notifiche in Tempo Reae**: Ricevi avvisi quando nuovi episodi sono disponibili e vengono scarcati.
+- 🔃 **Refresh Automatico di Jellyin**: Ogni nuovo episodio scaricato aggiorna automaticamente la libreria su tutti i dispoitivi.
 
 ---
 
-Se desideri ulteriori dettagli o personalizzazioni, sono a tua disposizione. 
