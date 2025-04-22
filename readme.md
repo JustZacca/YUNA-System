@@ -5,16 +5,16 @@ Ecco una versione migliorata e più leggibile del tuo documento Markdown, Lord N
 # 📚 Significato dei Nomi delle Classi
 
 **YUNA** – *Your Underground Networked Animebot*  
->Sistema centrale che coordina tutte le operazioni
+>Sistema centrale che coordina tutte le operazioni
 
 **MIKO** – *Media Indexing and Kapturing Operator*  
->Responsabile del download e dell'indicizzazione degli anime
+>Responsabile del download e dell'indicizzazione degli anime
 
 **AIRI** – *Anime Intelligent Retrieval Interface*  
->Gestisce la schedulazione e l'automazione dei download
+>Gestisce la memorizazzione dei dati e delle variabili d'ambiente
 
 **KAN** – *Kommunicative Anime Notification Assistant*  
->Invia notifiche agli utenti riguardo nuovi episodi disponibili
+>Invia notifiche agli utenti riguardo nuovi episodi disponibili
 
 ---
 
