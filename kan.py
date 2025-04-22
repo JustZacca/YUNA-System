@@ -301,6 +301,7 @@ class Kan:
         link = self.airi.get_anime_link(anime_name)
         if link == "Anime non trovato.":
             await query.edit_message_text("❌ Non sono riuscito a trovare l'anime.")
+            logging.error(f"Anime '{anime_name}' non trovato.")
             return
 
         self.logger.info(f"Anime selezionato per il download: {link}")

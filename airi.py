@@ -201,15 +201,17 @@ class Airi:
         # Itera sulla lista degli anime e cerca una corrispondenza parziale tramite regex
         for anime in anime_list:
             # Ottieni il nome dell'anime
-            name = anime.get("name", "").lower()  # Converti il nome a minuscolo per una ricerca case-insensitive
+            name = anime.get("name", "").strip().lower()  # Converti il nome a minuscolo e rimuovi spazi
             logger.debug(f"Controllando l'anime: '{name}' contro il termine di ricerca: '{anime_name}'")
             
             # Usa la regex per una ricerca parziale
-            if re.search(anime_name, name, re.IGNORECASE):
+            if re.search(re.escape(anime_name), name, re.IGNORECASE):
                 # Se viene trovato un match, restituisci il link
                 link = anime.get("link", "Link non disponibile.")
                 logger.debug(f"Match trovato. Anime: '{name}', Link: '{link}'")
                 return link
+            else:
+                logger.debug(f"Nessun match per l'anime: '{name}' con il termine di ricerca: '{anime_name}'")
         
         # Se non viene trovato alcun match, restituisci un messaggio di errore
         logger.debug(f"Nessun match trovato per anime_name: '{anime_name}'")
