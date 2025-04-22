@@ -24,7 +24,7 @@
 
 # 🛠️ Funzionalità Principali
 
-- 🔄 **Aggiornamento Automatico*: Controllo periodico per nuovi episodi e aggiornamento della libreia.
+- 🔄 **Aggiornamento Automatico**: Controllo periodico per nuovi episodi e aggiornamento della libreia.
 - 📱 **Gestione via Telegra**: Aggiunta e gestione degli anime direttamente dal tuo account Teleram.
 - 🔔 **Notifiche in Tempo Reae**: Ricevi avvisi quando nuovi episodi sono disponibili e vengono scarcati.
 - 🔃 **Refresh Automatico di Jellyin**: Ogni nuovo episodio scaricato aggiorna automaticamente la libreria su tutti i dispoitivi.
