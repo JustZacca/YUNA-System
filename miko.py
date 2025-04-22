@@ -111,20 +111,13 @@ class Miko:
             if match:
                 existing_numbers.add(int(match.group(1)))
 
-        total_numbers = set()
-        for ep in episodes:
-            try:
-                number = str(ep.number).strip().replace(",", ".")
-                total_numbers.add(float(number))
-            except ValueError:
-                continue
+        #TODO: Aggiunere il supporto ai numeri decimali esempio Berserk 2 episodio 9.5
+        total_numbers = {int(float(ep.number)) for ep in episodes if ep.number.isdigit() or re.match(r'^\d+(\.\d+)*$', ep.number)}
+        print(f"Numeri esistenti: {total_numbers}")
 
-        # Ordina i numeri
-        sorted_numbers = sorted(total_numbers)
-
-        missing = sorted_numbers - existing_numbers
+        missing = total_numbers - existing_numbers
         self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
-        self.airi.update_episodes_number(self.anime_name, len(sorted_numbers))
+        self.airi.update_episodes_number(self.anime_name, len(total_numbers))
 
         logger.info(f"Trovati {len(existing_numbers)} episodi già scaricati. Ne mancano {len(missing)}", extra={"classname": self.__class__.__name__})
 
