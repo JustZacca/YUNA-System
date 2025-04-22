@@ -149,6 +149,23 @@ class Airi:
         logger.warning(f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
         self.invalidate_config()
         # Se non viene trovato alcun anime con quel nome, non fare nulla
+    
+    def update_last_update(self, name, last_update):
+        """
+        Aggiorna la data di last_update dell'anime nel file config.json.
+        """
+        # Trova l'anime da aggiornare
+        for anime in self.config["anime"]:
+            if anime.get("name") == name:
+                anime['last_update'] = last_update.strftime("%Y-%m-%d %H:%M:%S")
+                # Scrittura nel file config.json
+                with open(self.config_path, "w") as config_file:
+                    json.dump(self.config, config_file, indent=4)
+                logger.info(f"Last update aggiornato per l'anime '{name}'.")
+                return
+        logger.warning(f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
+        self.invalidate_config()
+        # Se non viene trovato alcun anime con quel nome, non fare nulla
         
     def get_anime_link(self, anime_name):
         """

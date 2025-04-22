@@ -228,6 +228,8 @@ class Miko:
                 # Aggiungi l'hook per visualizzare il progresso del download
                 ep.download(title=f"{self.anime_name} - Episode {ep.number}", folder=self.anime_folder, hook=self.my_hook)
                 self.jellyfin.trigger_scan()
+                last_modified = ep.fileInfo().get("last_modified", "Sconosciuto")
+                self.airi.update_last_update(self.anime_name, last_modified)
             except Exception as e:
                 logger.error(f"[ERRORE] Episodio {ep.number} fallito. Errore: {e}", extra={"classname": self.__class__.__name__})
                 continue

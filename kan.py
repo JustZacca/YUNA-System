@@ -331,30 +331,46 @@ class Kan:
 
 
             # Salta se aggiornato di recente
-            if episodi_scaricati != numero_episodi or (7 <= days_since_update < 21):
-                self.logger.info(f"{anime_name} è vecchio e non ha tutti gli episodi. Procedo con il controllo.")
+            isNuovoEpisodio = False
+            if episodi_scaricati != numero_episodi:
+                self.logger.info(f"{anime_name} non ha tutti gli episodi. Procedo con il controllo.")
+                await context.bot.send_message(
+                    chat_id=self.AUTHORIZED_USER_ID,
+                    text=f"{anime_name} Non ha tutti gli episodi."
+                )
+            elif 7 <= days_since_update < 21:
+                self.logger.info(f"Potrebbero esserci nuovi episodi per {anime_name}. Procedo con il controllo.")
+                isNuovoEpisodio = True
             elif episodi_scaricati == numero_episodi:
                 self.logger.info(f"{anime_name} è aggiornato. Salto controllo.")
                 continue
             
-            self.logger.info(f"L'anime {anime_name} potrebbe non essere aggiornato.")
             await self.miko_instance.loadAnime(self.anime_link)
 
             self.missing_episodes_list = await self.miko_instance.getMissingEpisodes()
             missing_episodes = len(self.missing_episodes_list) > 0
 
             if missing_episodes:
-                self.logger.info(f"Episodi mancanti per {anime_name}. Inizio download...")
-                await context.bot.send_message(
-                    chat_id=self.AUTHORIZED_USER_ID,
-                    text=f"Episodi mancanti per {anime_name}. Inizio download..."
-                )
+                if isNuovoEpisodio:
+                    self.logger.info(f"Nuovi episodi trovati per {anime_name}. Inizio download...")
+                    await context.bot.send_message(
+                        chat_id=self.AUTHORIZED_USER_ID,
+                        text=f"Nuovi episodi trovati per [{anime_name}]({self.airi.BASE_URL+self.anime_link}). Inizio download...",
+                        parse_mode="Markdown"
+                    )
+                else:
+                    self.logger.info(f"Mancano {len(self.missing_episodes_list)} episodi per {anime_name}. Inizio download...")
+                    await context.bot.send_message(
+                        chat_id=self.AUTHORIZED_USER_ID,
+                        text=f"Mancano {len(self.missing_episodes_list)} episodi per {anime_name}. Inizio download..."
+                    )
                 await self.download_new_episodes(anime_name)
                 await context.bot.send_message(
                     chat_id=self.AUTHORIZED_USER_ID,
                     text=f"🎬 Tutti gli episodi di {anime_name} sono stati scaricati."
                 )
             else:
+                isNuovoEpisodio = False
                 self.logger.info(f"Tutti gli episodi di {anime_name} sono aggiornati.")
         self.logger.info("Controllo episodi completato.")
         await context.bot.send_message(
