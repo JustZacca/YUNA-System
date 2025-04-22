@@ -1,7 +1,3 @@
-Ecco una versione migliorata e più leggibile del tuo documento Markdown, Lord Nicholas:
-
----
-
 # 📚 Significato dei Nomi delle Classi
 
 **YUNA** – *Your Underground Networked Animebot*  
