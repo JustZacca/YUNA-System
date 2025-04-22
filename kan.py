@@ -309,7 +309,7 @@ class Kan:
         self.missing_episodes_list = await self.miko_instance.getMissingEpisodes()
 
         if len(self.missing_episodes_list) == 0:
-            await query.edit_message_text("✅ Tutti gli episodi sono già scaricati. La serie è completa!")
+            await query.edit_message_text("✅ Tutti gli episodi di "+self.miko_instance.anime_name+" sono già scaricati. La serie è completa!")
             return
 
         if len(self.missing_episodes_list) == 1:
@@ -321,7 +321,7 @@ class Kan:
             await context.bot.send_message(chat_id=query.message.chat_id, text="❌ Si è verificato un errore durante il download degli episodi.")
             return
 
-        await context.bot.send_message(chat_id=query.message.chat_id, text="✅ Tutti gli episodi sono stati scaricati con successo!")
+        await context.bot.send_message(chat_id=query.message.chat_id, text="✅ Tutti gli episodi di "+self.miko_instance.anime_name+" sono stati scaricati con successo!")
 
 
 
