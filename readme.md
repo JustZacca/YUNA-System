@@ -16,9 +16,9 @@
 
 # 🎯 Obiettivo del Progetto
 
-**YUNA* è progettato per affrontare un problema specific:
+*YUNA* è progettato per affrontare un problema specific:
 
- Automatizzare il processo di download e aggiornamento degli anime su un server Jellyfin, integrando il tutto con Telegram per una gestione semplice e immediat.
+ Automatizzare il processo di download e aggiornamento degli anime su un server Jellyfin, integrando il tutto con Telegram per una gestione semplice e immediato.
 
 ---
 
