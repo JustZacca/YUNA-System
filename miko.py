@@ -111,7 +111,7 @@ class Miko:
             if match:
                 existing_numbers.add(int(match.group(1)))
 
-        total_numbers = {int(float(ep.number)) for ep in episodes if ep.number.replace('.', '', 1).isdigit()}
+        total_numbers = {int(float(ep.number)) for ep in episodes if re.match(r'^\d+(\.\d+)*$', ep.number)}
 
         missing = total_numbers - existing_numbers
         self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
