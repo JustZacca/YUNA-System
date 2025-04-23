@@ -8,6 +8,7 @@ import re
 from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
 from colorama import init
 from datetime import datetime, timezone
+import requests
 import JellyfinClient
 init(autoreset=True)
 
@@ -87,11 +88,40 @@ class Miko:
             try:
                 os.makedirs(self.anime_folder)
                 logger.info(f"Cartella creata: {self.anime_folder}", extra={"classname": self.__class__.__name__})
+                await self.saveAnimeCover()
+                self.jellyfin.trigger_scan()
                 return True
             except Exception as e:
                 logger.error(f"Errore nella creazione della cartella {self.anime_folder}: {e}", extra={"classname": self.__class__.__name__})
                 return False
         return True
+
+    async def saveAnimeCover(self):
+        if self.anime is None:
+            logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
+            return False
+
+        try:
+            # Ottieni l'URL della copertina
+            cover_url = self.anime.getCover()
+            cover_path = os.path.join(self.anime_folder, "folder.jpg")
+
+            # Scarica l'immagine
+            response = requests.get(cover_url, stream=True)
+            response.raise_for_status()  # solleva errore se c'è un problema con il download
+
+            # Salva il file
+            with open(cover_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+            logger.info(f"Copertina salvata in: {cover_path}", extra={"classname": self.__class__.__name__})
+            return True
+
+        except Exception as e:
+            logger.error(f"Errore nel salvataggio della copertina per '{self.anime_name}': {e}", extra={"classname": self.__class__.__name__})
+            return False
+        
 
     async def getMissingEpisodes(self):
         if self.anime is None:
