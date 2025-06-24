@@ -63,7 +63,7 @@ class Gats:
     async def load_show(self, show_id: str):
         try:
             logger.info(f"[LOAD] Carico show ID: {show_id}", extra={"classname": self.__class__.__name__})
-            data = await self.sc.load(show_id)
+            data = await self.sc.load(str(show_id))
             
             # Log completo dei dati ricevuti (attenzione a grandi quantità di dati)
             logger.debug(f"[LOAD DATA] Contenuto JSON ricevuto: {data}", extra={"classname": self.__class__.__name__})
@@ -72,7 +72,7 @@ class Gats:
             self.show_id = data.get("id")
             
             # Debug approfondito su 'name'
-            raw_name = data.get("name")
+            raw_name = data.get("title")
             logger.debug(f"[LOAD DATA] Valore raw 'name': {raw_name} (tipo: {type(raw_name)})", extra={"classname": self.__class__.__name__})
             
             # Assicurati che sia stringa, fallback
