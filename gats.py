@@ -49,16 +49,17 @@ class Gats:
         self.show_name = None  # Variabile d’istanza per salvare il nome dell'anime
         self.show_id = None
 
-    async def search_show(self, query: str):
+    def search_show(self, query: str):
         logger.info(f"[SEARCH] Cerco: {query}", extra={"classname": self.__class__.__name__})
         try:
-            results = await self.sc.search(query)
+            results = self.sc.search(query)
             if not results:
                 logger.warning("[SEARCH] Nessun risultato trovato", extra={"classname": self.__class__.__name__})
             return results
         except Exception as e:
             logger.error(f"[SEARCH ERROR] {e}", extra={"classname": self.__class__.__name__})
             return {}
+
 
 
         async def load_show(self, show_id: str):
