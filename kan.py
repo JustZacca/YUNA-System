@@ -404,10 +404,10 @@ class Kan:
                 isNuovoEpisodio = False
                 self.logger.info(f"Tutti gli episodi di {anime_name} sono aggiornati.")
         self.logger.info("Controllo episodi completato.")
-        await context.bot.send_message(
-            chat_id=self.AUTHORIZED_USER_ID,
-            text="Controllo episodi completato. Tutti gli anime sono aggiornati. ✅"
-        )
+        #await context.bot.send_message(
+        #    chat_id=self.AUTHORIZED_USER_ID,
+        #    text="Controllo episodi completato. Tutti gli anime sono aggiornati. ✅"
+        #)
 
 
     async def download_new_episodes(self, anime_name: str):
