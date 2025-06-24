@@ -44,7 +44,7 @@ class Gats:
         self.anime = None  # Variabile d’istanza per salvare l'anime
         self.airi = Airi()  # Inizializza l'oggetto Airi
         self.tv_folder = None  # Variabile d’istanza per salvare la cartella dell'anime
-        self.sc = API('https://172.67.161.253')
+        self.sc = API('https://streamingunity.shop')
         self.jellyfin = JellyfinClient.JellyfinClient()  # Initialize the client correctly
         self.show_name = None  # Variabile d’istanza per salvare il nome dell'anime
         self.show_id = None
