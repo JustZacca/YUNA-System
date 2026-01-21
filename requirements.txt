@@ -1,6 +1,8 @@
 # Telegram Bot
 python-telegram-bot>=21.0
 
+python-telegram-bot[job-queue]>=21.0
+
 # Anime scraping
 animeworld>=1.6.0
 
