@@ -1,18 +1,29 @@
-# Usa un'immagine base di Python
-FROM python:3.13-slim
+# YUNA-System Dockerfile
+FROM python:3.12-slim
 
-# Imposta la cartella di lavoro
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Set working directory
 WORKDIR /app
 
-# Copia i file del progetto nella cartella di lavoro
-COPY . /app
-COPY .env /app/.env
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-# Installa le dipendenze
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Espone la porta (se la tua app serve su una porta, come un web server)
-EXPOSE 5000
+# Copy application code
+COPY *.py .
 
-# Comando per eseguire l'app (modifica se necessario)
-CMD ["python", "kan.py"]
+# Create directories for mounted volumes
+RUN mkdir -p /data /downloads
+
+# Default command
+CMD ["python", "main.py"]

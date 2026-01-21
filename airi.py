@@ -1,14 +1,17 @@
 from dotenv import load_dotenv
 import os
-import json
 import logging
+import shutil
 from colorama import Fore, Style, init
 # Importa la classe ColoredFormatter dal file color_utils
 from color_utils import ColoredFormatter
 from colorama import init
 import re
 from urllib.parse import urlparse
-import time
+from datetime import datetime
+import httpx
+
+from database import Database
 
 init(autoreset=True)
 
@@ -23,26 +26,114 @@ handler.setFormatter(formatter)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(handler)
-_config = None
-_config_timestamp = 0
-_config_ttl = 0.1  # 100 ms (puoi cambiare il valore)
+
+# Cache per l'URL di AnimeWorld
+_animeworld_url_cache = None
+
+
+def get_animeworld_url():
+    """
+    Recupera automaticamente l'URL corrente di AnimeWorld seguendo i redirect.
+    Usa una cache per evitare richieste multiple.
+    """
+    global _animeworld_url_cache
+
+    if _animeworld_url_cache is not None:
+        return _animeworld_url_cache
+
+    # Domini noti che reindirizzano all'URL corrente
+    fallback_domains = [
+        'https://www.animeworld.tv/',
+        'https://animeworld.tv/',
+        'https://www.animeworld.so/',
+    ]
+
+    for domain in fallback_domains:
+        try:
+            response = httpx.get(domain, follow_redirects=True, timeout=10)
+            # Estrae il base URL (schema + host)
+            final_url = str(response.url)
+            parsed = urlparse(final_url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            _animeworld_url_cache = base_url
+            logger.info(f"URL AnimeWorld recuperato automaticamente: {base_url}")
+            return base_url
+        except Exception as e:
+            logger.warning(f"Impossibile raggiungere {domain}: {e}")
+            continue
+
+    # Fallback al default se tutti i tentativi falliscono
+    default_url = "https://www.animeworld.ac"
+    logger.warning(f"Impossibile recuperare URL AnimeWorld, uso default: {default_url}")
+    _animeworld_url_cache = default_url
+    return default_url
 
 
 class Airi:
-    def __init__(self):
+    def __init__(self, db_path: str = "yuna.db"):
         load_dotenv()  # Carica il file .env nella environment
 
         self.destination_folder = os.getenv("DESTINATION_FOLDER")
         self.telegram_token = os.getenv("TELEGRAM_TOKEN")
-        self.TELEGRAM_CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
+        # Gestione errore per TELEGRAM_CHAT_ID non valido
+        telegram_chat_id_str = os.getenv("TELEGRAM_CHAT_ID")
+        if not telegram_chat_id_str:
+            raise ValueError("TELEGRAM_CHAT_ID non configurato nelle variabili d'ambiente.")
+        try:
+            self.TELEGRAM_CHAT_ID = int(telegram_chat_id_str)
+        except ValueError:
+            raise ValueError(f"TELEGRAM_CHAT_ID deve essere un numero intero, ricevuto: {telegram_chat_id_str}")
         # Default a 60 secondi se non impostato
         self.UPDATE_TIME = int(os.getenv("UPDATE_TIME", 60))
-        self.BASE_URL = os.getenv("BASE_URL", "https://www.animeworld.ac")
+        # Recupera automaticamente l'URL di AnimeWorld
+        self.BASE_URL = get_animeworld_url()
         self.BASE_URL_SC = os.getenv(
             "BASE_URL_SC", "https://streamingunity.shop")
         self.config_path = "config.json"
         self.tv_config_path = "tv_config.json"
-        self.config = self.load_or_create_config()
+
+        # Initialize database and auto-migrate from JSON if exists
+        self.db = Database(db_path)
+        self._auto_migrate_from_json()
+
+    def _auto_migrate_from_json(self):
+        """
+        Automatically migrate from config.json to SQLite if the JSON file exists.
+        """
+        if os.path.exists(self.config_path):
+            logger.info(f"Found {self.config_path}, migrating to SQLite database...")
+            success, message = self.db.migrate_from_json(self.config_path)
+            if success:
+                logger.info(f"Migration completed: {message}")
+            else:
+                logger.warning(f"Migration failed: {message}")
+
+    def _format_last_update(self, last_update) -> str:
+        """
+        Convert last_update to string format.
+        Handles both datetime objects and strings.
+        """
+        if isinstance(last_update, datetime):
+            return last_update.strftime("%Y-%m-%d %H:%M:%S")
+        elif isinstance(last_update, str):
+            return last_update
+        else:
+            return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def _parse_last_update(self, last_update) -> datetime:
+        """
+        Convert last_update to datetime object.
+        Handles both datetime objects and strings.
+        """
+        if isinstance(last_update, datetime):
+            return last_update
+        elif isinstance(last_update, str):
+            try:
+                return datetime.strptime(last_update, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                return datetime.now()
+        else:
+            return datetime.now()
 
     def get_destination_folder(self):
         """
@@ -55,250 +146,205 @@ class Airi:
 
     def load_or_create_config(self):
         """
-        Carica il file config.json se esiste, altrimenti lo crea vuoto.
-        In caso di errore, rinomina la vecchia configurazione e crea una nuova configurazione vuota.
+        Legacy method for backward compatibility.
+        Returns a dict-like structure from the database.
         """
-        global _config, _config_timestamp
-        now = time.time()
-        if _config is not None and (now - _config_timestamp) < _config_ttl:
-            return _config
-
-        if not os.path.exists(self.config_path):
-            logger.info(
-                f"{self.config_path} non trovato. Creazione di una configurazione vuota.")
-            # Creazione di una configurazione vuota
-            default_config = {
-                "anime": [],
-                "tv": [],
-                "movies": []
-            }
-            with open(self.config_path, "w") as config_file:
-                json.dump(default_config, config_file, indent=4)
-            logger.info(f"{self.config_path} creato con lista anime vuota.")
-            _config_timestamp = now
-            return default_config
-
-        # Se il file esiste, carica il contenuto
-        try:
-            with open(self.config_path, "r") as config_file:
-                config = json.load(config_file)
-                if not config:  # Controlla se il file è vuoto
-                    raise ValueError("Il file config.json è vuoto.")
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.error(
-                f"Errore nella lettura di {self.config_path}: {e}. Rinominando il file e creando una nuova configurazione vuota.")
-            # Rinomina il file corrotto
-            corrupted_path = f"{self.config_path}.corrupted_{int(time.time())}"
-            os.rename(self.config_path, corrupted_path)
-            logger.info(
-                f"File corrotto rinominato in {corrupted_path}. Backup creato con successo.")
-            # Creazione di una configurazione vuota
-            config = {
-                "anime": [],
-                "tv": [],
-                "movies": []
-            }
-            with open(self.config_path, "w") as config_file:
-                json.dump(config, config_file, indent=4)
-            logger.info(
-                f"{self.config_path} ripristinato con lista anime vuota.")
-        else:
-            logger.info(f"{self.config_path} caricato correttamente.")
-
-        _config = config
-        _config_timestamp = now
-        return config
+        return {
+            "anime": self.db.get_all_anime(),
+            "tv": self.db.get_all_tv(),
+            "movies": self.db.get_all_movies()
+        }
 
     def get_anime(self):
         """
-        Ritorna la lista degli anime presenti nel config.
+        Ritorna la lista degli anime presenti nel database.
         """
-        self.load_or_create_config()  # Assicurati che la configurazione sia caricata
-        return self.config.get("anime", [])
+        return self.db.get_all_anime()
 
     def add_anime(self, name, link, last_update, numero_episodi):
         """
-        Aggiunge un nuovo anime al file config.json se non esiste già un anime con lo stesso link.
+        Aggiunge un nuovo anime al database se non esiste già un anime con lo stesso link.
         """
         # Rimuove il base URL, mantiene solo il path (es: /play/nome-anime.xyz)
         parsed_link = urlparse(link).path
 
-        # Controlla se esiste già un anime con lo stesso link
-        for anime in self.config["anime"]:
+        # Convert last_update to datetime if it's a string
+        last_update_dt = self._parse_last_update(last_update)
+
+        # Check if anime with same link already exists
+        existing_anime = self.db.get_all_anime()
+        for anime in existing_anime:
             if anime.get("link") == parsed_link:
                 logger.warning(
                     f"L'anime con il link '{parsed_link}' esiste già. Aggiunta saltata.")
                 return
 
-        # Se non esiste, aggiungi il nuovo anime
-        anime = {
-            "name": name,
-            "link": parsed_link,
-            "last_update": last_update.strftime("%Y-%m-%d %H:%M:%S"),
-            "episodi_scaricati": 0,
-            "numero_episodi": numero_episodi
-        }
-        self.config["anime"].append(anime)
-
-        # Scrittura nel file config.json
-        with open(self.config_path, "w") as config_file:
-            json.dump(self.config, config_file, indent=4)
-        logger.info(f"Anime '{name}' aggiunto alla configurazione.")
-        logger.debug(
-            f"Configurazione aggiornata: {json.dumps(self.config, indent=4)}")
-        self.invalidate_config()
-        self.load_or_create_config()
+        # Add to database
+        success = self.db.add_anime(name, parsed_link, last_update_dt, numero_episodi)
+        if success:
+            logger.info(f"Anime '{name}' aggiunto alla configurazione.")
         return
 
     def update_downloaded_episodes(self, name, episodi_scaricati: int):
         """
-        Aggiorna la data di download dell'anime nel file config.json.
+        Aggiorna il numero di episodi scaricati dell'anime nel database.
         """
-        # Trova l'anime da aggiornare
-        for anime in self.config["anime"]:
-            if anime.get("name") == name:
-                anime['episodi_scaricati'] = episodi_scaricati
-                # Scrittura nel file config.json
-                with open(self.config_path, "w") as config_file:
-                    json.dump(self.config, config_file, indent=4)
-                logger.info(
-                    f"Numero di episodi scaricati aggiornato per l'anime '{name}'.")
-                return
-        logger.warning(
-            f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
-        self.invalidate_config()
-        # Se non viene trovato alcun anime con quel nome, non fare nulla
+        success = self.db.update_anime_episodes(name, episodi_scaricati)
+        if success:
+            logger.info(
+                f"Numero di episodi scaricati aggiornato per l'anime '{name}'.")
+        else:
+            logger.warning(
+                f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
 
     def update_episodes_number(self, name, numero_episodi):
         """
-        Aggiorna la data di download dell'anime nel file config.json.
+        Aggiorna il numero totale di episodi dell'anime nel database.
         """
-        # Trova l'anime da aggiornare
-        for anime in self.config["anime"]:
-            if anime.get("name") == name:
-                anime['numero_episodi'] = numero_episodi
-                # Scrittura nel file config.json
-                with open(self.config_path, "w") as config_file:
-                    json.dump(self.config, config_file, indent=4)
-                logger.info(
-                    f"Numero episodi totale aggiornato per l'anime '{name}'.")
-                return
-        logger.warning(
-            f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
-        self.invalidate_config()
-        # Se non viene trovato alcun anime con quel nome, non fare nulla
+        success = self.db.update_anime_total_episodes(name, numero_episodi)
+        if success:
+            logger.info(
+                f"Numero episodi totale aggiornato per l'anime '{name}'.")
+        else:
+            logger.warning(
+                f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
 
     def update_last_update(self, name, last_update):
         """
-        Aggiorna la data di last_update dell'anime nel file config.json.
+        Aggiorna la data di last_update dell'anime nel database.
         """
-        # Trova l'anime da aggiornare
-        for anime in self.config["anime"]:
-            if anime.get("name") == name:
-                anime['last_update'] = last_update.strftime(
-                    "%Y-%m-%d %H:%M:%S")
-                # Scrittura nel file config.json
-                with open(self.config_path, "w") as config_file:
-                    json.dump(self.config, config_file, indent=4)
-                logger.info(f"Last update aggiornato per l'anime '{name}'.")
-                return
-        logger.warning(
-            f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
-        self.invalidate_config()
-        # Se non viene trovato alcun anime con quel nome, non fare nulla
+        # Convert last_update to datetime if it's a string
+        last_update_dt = self._parse_last_update(last_update)
+
+        success = self.db.update_anime_last_update(name, last_update_dt)
+        if success:
+            logger.info(f"Last update aggiornato per l'anime '{name}'.")
+        else:
+            logger.warning(
+                f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
 
     def get_anime_link(self, anime_name):
         """
         Restituisce il link dell'anime in base al nome (anche parziale) usando una regex.
         La ricerca è insensibile al maiuscolo/minuscolo.
         """
-        self.load_or_create_config()  # Assicurati che la configurazione sia caricata
         # Pulisci il nome dell'anime per evitare errori con spazi e caratteri speciali
         # Normalizza il nome dell'anime in minuscolo
         anime_name = anime_name.strip().lower()
         logger.debug(f"Nome anime normalizzato per la ricerca: '{anime_name}'")
 
-        # Carica la lista degli anime dal config
-        anime_list = self.get_anime()
-        logger.debug(f"Lista anime caricata: {anime_list}")
-
-        # Itera sulla lista degli anime e cerca una corrispondenza parziale tramite regex
-        for anime in anime_list:
-            # Ottieni il nome dell'anime
-            # Converti il nome a minuscolo e rimuovi spazi
-            name = anime.get("name", "").strip().lower()
-            logger.debug(
-                f"Controllando l'anime: '{name}' contro il termine di ricerca: '{anime_name}'")
-
-            # Usa la regex per una ricerca parziale
-            if re.search(re.escape(anime_name), name, re.IGNORECASE):
-                # Se viene trovato un match, restituisci il link
-                link = anime.get("link", "Link non disponibile.")
-                logger.debug(f"Match trovato. Anime: '{name}', Link: '{link}'")
-                return link
-            else:
-                logger.debug(
-                    f"Nessun match per l'anime: '{name}' con il termine di ricerca: '{anime_name}'")
+        # Use database search
+        anime = self.db.search_anime_by_name(anime_name)
+        if anime:
+            link = anime.get("link", "Link non disponibile.")
+            logger.debug(f"Match trovato. Anime: '{anime.get('name')}', Link: '{link}'")
+            return link
 
         # Se non viene trovato alcun match, restituisci un messaggio di errore
         logger.debug(f"Nessun match trovato per anime_name: '{anime_name}'")
         return "Anime non trovato."
 
     def invalidate_config(self):
-        global _config, _config_timestamp
-        logger.info("Config invalidato")
-        _config = None
-        _config_timestamp = 0
+        """
+        Legacy method for backward compatibility.
+        No longer needed since SQLite handles data persistence.
+        """
+        logger.debug("Config invalidation not needed with SQLite database")
 
     def get_tv(self):
-        self.load_or_create_config()
-        return self.config.get("tv", [])
+        """
+        Ritorna la lista delle serie TV presenti nel database.
+        """
+        return self.db.get_all_tv()
 
     def add_tv(self, name, link, last_update, numero_episodi):
+        """
+        Aggiunge una nuova serie TV al database.
+        """
         parsed_link = urlparse(link).path
-        for show in self.config["tv"]:
+
+        # Convert last_update to datetime if it's a string
+        last_update_dt = self._parse_last_update(last_update)
+
+        # Check if TV show with same link already exists
+        existing_tv = self.db.get_all_tv()
+        for show in existing_tv:
             if show.get("link") == parsed_link:
                 logger.warning(
                     f"La serie TV con il link '{parsed_link}' esiste già. Aggiunta saltata.")
                 return
 
-        show = {
-            "name": name,
-            "link": parsed_link,
-            "last_update": last_update.strftime("%Y-%m-%d %H:%M:%S"),
-            "episodi_scaricati": 0,
-            "numero_episodi": numero_episodi
-        }
-        self.config["tv"].append(show)
-
-        with open(self.config_path, "w") as config_file:
-            json.dump(self.config, config_file, indent=4)
-        logger.info(f"Serie TV '{name}' aggiunta alla configurazione.")
-        self.invalidate_config()
-        self.load_or_create_config()
+        success = self.db.add_tv(name, parsed_link, last_update_dt, numero_episodi)
+        if success:
+            logger.info(f"Serie TV '{name}' aggiunta alla configurazione.")
 
     def get_movies(self):
-        self.load_or_create_config()
-        return self.config.get("movies", [])
+        """
+        Ritorna la lista dei film presenti nel database.
+        """
+        return self.db.get_all_movies()
 
     def add_movie(self, name, link, last_update):
+        """
+        Aggiunge un nuovo film al database.
+        """
         parsed_link = urlparse(link).path
-        for movie in self.config["movies"]:
+
+        # Convert last_update to datetime if it's a string
+        last_update_dt = self._parse_last_update(last_update)
+
+        # Check if movie with same link already exists
+        existing_movies = self.db.get_all_movies()
+        for movie in existing_movies:
             if movie.get("link") == parsed_link:
                 logger.warning(
                     f"Il film con il link '{parsed_link}' esiste già. Aggiunta saltata.")
                 return
 
-        movie = {
-            "name": name,
-            "link": parsed_link,
-            "last_update": last_update.strftime("%Y-%m-%d %H:%M:%S"),
-            "scaricato": False
-        }
-        self.config["movies"].append(movie)
+        success = self.db.add_movie(name, parsed_link, last_update_dt)
+        if success:
+            logger.info(f"Film '{name}' aggiunto alla configurazione.")
 
-        with open(self.config_path, "w") as config_file:
-            json.dump(self.config, config_file, indent=4)
-        logger.info(f"Film '{name}' aggiunto alla configurazione.")
-        self.invalidate_config()
-        self.load_or_create_config()
+    def remove_anime(self, anime_name: str) -> tuple:
+        """
+        Rimuove un anime dal database e cancella la sua cartella dal disco.
+
+        Args:
+            anime_name: Nome dell'anime da rimuovere
+
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        # Check if anime exists
+        anime = self.db.get_anime_by_name(anime_name)
+        if anime is None:
+            logger.warning(f"Anime '{anime_name}' non trovato nella configurazione.")
+            return (False, f"Anime '{anime_name}' non trovato.")
+
+        # Remove from database
+        success = self.db.remove_anime(anime_name)
+        if not success:
+            logger.error(f"Errore nella rimozione dell'anime '{anime_name}' dal database.")
+            return (False, f"Errore nella rimozione dal database.")
+
+        logger.info(f"Anime '{anime_name}' rimosso dalla configurazione.")
+
+        # Cancella la cartella dal disco
+        anime_folder = os.path.join(self.destination_folder, anime_name)
+        folder_deleted = False
+
+        if os.path.exists(anime_folder):
+            try:
+                shutil.rmtree(anime_folder)
+                logger.info(f"Cartella '{anime_folder}' eliminata con successo.")
+                folder_deleted = True
+            except Exception as e:
+                logger.error(f"Errore nell'eliminazione della cartella '{anime_folder}': {e}")
+                return (True, f"Anime rimosso dal config, ma errore nell'eliminazione cartella: {e}")
+        else:
+            logger.warning(f"Cartella '{anime_folder}' non esistente.")
+
+        if folder_deleted:
+            return (True, f"Anime '{anime_name}' rimosso completamente (config + cartella).")
+        else:
+            return (True, f"Anime '{anime_name}' rimosso dal config. Cartella non esisteva.")

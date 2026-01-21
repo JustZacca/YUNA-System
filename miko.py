@@ -2,6 +2,7 @@
 import animeworld as aw
 import os
 import logging
+import asyncio
 from colorama import Fore, Style, init
 from airi import Airi
 import re
@@ -43,8 +44,9 @@ class Miko:
         self.anime_folder = None  # Variabile d’istanza per salvare la cartella dell'anime
         self.aw = aw
         self.aw.SES.base_url = self.airi.BASE_URL
-        self.jellyfin = JellyfinClient.JellyfinClient()  # Initialize the client correctly
-        self.anime_name = None  # Variabile d’istanza per salvare il nome dell'anime
+        self.jellyfin = None  # JellyfinClient.JellyfinClient()  # Disabilitato temporaneamente
+        self.anime_name = None  # Variabile d'istanza per salvare il nome dell'anime
+        self.download_semaphore = asyncio.Semaphore(3)  # Max 3 download paralleli
     
     async def loadAnime(self, anime_link):
         """
@@ -89,7 +91,8 @@ class Miko:
                 os.makedirs(self.anime_folder)
                 logger.info(f"Cartella creata: {self.anime_folder}", extra={"classname": self.__class__.__name__})
                 await self.saveAnimeCover()
-                self.jellyfin.trigger_scan()
+                if self.jellyfin:
+                    self.jellyfin.trigger_scan()
                 return True
             except Exception as e:
                 logger.error(f"Errore nella creazione della cartella {self.anime_folder}: {e}", extra={"classname": self.__class__.__name__})
@@ -141,8 +144,15 @@ class Miko:
             if match:
                 existing_numbers.add(int(match.group(1)))
 
-        #TODO: Aggiunere il supporto ai numeri decimali esempio Berserk 2 episodio 9.5
-        total_numbers = {int(float(ep.number)) for ep in episodes if ep.number.isdigit() or re.match(r'^\d+(\.\d+)*$', ep.number)}
+        # Supporta numeri interi e decimali (es: "9", "9.5")
+        total_numbers = set()
+        for ep in episodes:
+            try:
+                # Controlla se il numero e un intero o decimale valido
+                if re.match(r'^\d+(\.\d+)?$', str(ep.number)):
+                    total_numbers.add(int(float(ep.number)))
+            except (ValueError, TypeError):
+                logger.warning(f"Numero episodio non valido: {ep.number}", extra={"classname": self.__class__.__name__})
 
         missing = total_numbers - existing_numbers
         self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
@@ -182,7 +192,14 @@ class Miko:
             logger.warning(f"Errore nel recupero episodi per {self.anime_name}.", extra={"classname": self.__class__.__name__})
             return []
 
-        total_numbers = {int(ep.number) for ep in total_episodes}
+        # Supporta numeri interi e decimali
+        total_numbers = set()
+        for ep in total_episodes:
+            try:
+                if re.match(r'^\d+(\.\d+)?$', str(ep.number)):
+                    total_numbers.add(int(float(ep.number)))
+            except (ValueError, TypeError):
+                logger.warning(f"Numero episodio non valido: {ep.number}", extra={"classname": self.__class__.__name__})
 
         missing = total_numbers - existing_numbers
         extra = existing_numbers - total_numbers
@@ -243,7 +260,48 @@ class Miko:
         elif d['status'] == 'finished':
             print('\n\n\n')
 
+    def _sync_download_episode(self, ep, title, folder):
+        """
+        Wrapper sincrono per ep.download() - viene eseguito in un thread separato.
+        Restituisce (episode_number, success, error_msg, last_modified)
+        """
+        try:
+            ep.download(title=title, folder=folder, hook=self.my_hook)
+            last_modified = ep.fileInfo().get("last_modified", None)
+            return (ep.number, True, None, last_modified)
+        except Exception as e:
+            return (ep.number, False, str(e), None)
+
+    async def _download_single_episode(self, ep, anime_name, folder):
+        """
+        Scarica un singolo episodio usando asyncio.to_thread per non bloccare.
+        Il semaphore limita a 3 download simultanei.
+        """
+        async with self.download_semaphore:
+            title = f"{anime_name} - Episode {ep.number}"
+            logger.info(f"Inizio download: {title}", extra={"classname": self.__class__.__name__})
+
+            # Esegui il download sincrono in un thread separato
+            result = await asyncio.to_thread(
+                self._sync_download_episode,
+                ep, title, folder
+            )
+
+            ep_number, success, error_msg, last_modified = result
+
+            if success:
+                logger.info(f"Completato download: Episode {ep_number}", extra={"classname": self.__class__.__name__})
+                if last_modified:
+                    self.airi.update_last_update(anime_name, last_modified)
+            else:
+                logger.error(f"Fallito download Episode {ep_number}: {error_msg}", extra={"classname": self.__class__.__name__})
+
+            return result
+
     async def downloadEpisodes(self, episode_list):
+        """
+        Scarica episodi in parallelo (max 3 alla volta) senza bloccare l'event loop.
+        """
         if self.anime is None:
             logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
             return False
@@ -254,42 +312,61 @@ class Miko:
             logger.error(f"Impossibile recuperare gli episodi specificati. Errore: {e}", extra={"classname": self.__class__.__name__})
             return False
 
-        logger.info(f"Inizio download di {len(episodes)} episodi...", extra={"classname": self.__class__.__name__})
+        logger.info(f"Inizio download PARALLELO di {len(episodes)} episodi (max 3 simultanei)...", extra={"classname": self.__class__.__name__})
 
-        for ep in episodes:
-            try:
-                # Aggiungi l'hook per visualizzare il progresso del download
-                ep.download(title=f"{self.anime_name} - Episode {ep.number}", folder=self.anime_folder, hook=self.my_hook)
-                self.jellyfin.trigger_scan()
-                last_modified = ep.fileInfo().get("last_modified", "Sconosciuto")
-                self.airi.update_last_update(self.anime_name, last_modified)
-                
-            except Exception as e:
-                logger.error(f"[ERRORE] Episodio {ep.number} fallito. Errore: {e}", extra={"classname": self.__class__.__name__})
-                continue
+        # Crea task per tutti gli episodi - il semaphore gestirà il limite
+        tasks = [
+            self._download_single_episode(ep, self.anime_name, self.anime_folder)
+            for ep in episodes
+        ]
 
-        logger.info("Download degli episodi completato.", extra={"classname": self.__class__.__name__})
+        # Esegui tutti i task concorrentemente
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Conta successi e fallimenti
+        successes = sum(1 for r in results if isinstance(r, tuple) and r[1])
+        failures = len(results) - successes
+
+        logger.info(f"Download completato. Successi: {successes}, Fallimenti: {failures}", extra={"classname": self.__class__.__name__})
+
+        # Conta gli episodi effettivamente presenti nella cartella
         try:
-            episode_number = int(float(episodes[-1].number))
-        except (ValueError, TypeError) as e:
-            logger.error(f"Errore nel cast del numero dell'episodio: {e}", extra={"classname": self.__class__.__name__})
-            episode_number = 0  # Default value or handle appropriately
-        self.airi.update_downloaded_episodes(self.anime_name, episode_number)
-        return True
+            existing_files = os.listdir(self.anime_folder)
+            downloaded_count = sum(
+                1 for f in existing_files
+                if re.match(rf".*Episode\s+(\d+)\.mp4", f, re.IGNORECASE)
+            )
+            self.airi.update_downloaded_episodes(self.anime_name, downloaded_count)
+        except Exception as e:
+            logger.error(f"Errore nel conteggio episodi scaricati: {e}", extra={"classname": self.__class__.__name__})
+
+        # Trigger Jellyfin scan una sola volta alla fine
+        if self.jellyfin and successes > 0:
+            self.jellyfin.trigger_scan()
+
+        return failures == 0
         
     async def addAnime(self, link):
         """
         Aggiunge un nuovo anime al file config.json.
         """
-        await self.loadAnime(link)
+        anime = await self.loadAnime(link)
+        if anime is None:
+            logger.error(f"Impossibile caricare l'anime dal link: {link}", extra={"classname": self.__class__.__name__})
+            return None
+
         episodes = self.anime.getEpisodes()
+        if not episodes:
+            logger.error(f"Nessun episodio trovato per l'anime: {self.anime_name}", extra={"classname": self.__class__.__name__})
+            return None
+
         last_episode_info = episodes[-1].fileInfo()
         last_modified = last_episode_info.get("last_modified", "Sconosciuto")
-        
+
         if not await self.setupAnimeFolder():
             logger.error("Impossibile configurare la cartella dell'anime. Operazione fallita.", extra={"classname": self.__class__.__name__})
             return None
-        
+
         self.airi.add_anime(self.anime_name, link, last_modified, len(episodes))
         return self.anime_name
         

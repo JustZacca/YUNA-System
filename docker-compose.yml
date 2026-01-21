@@ -1,0 +1,21 @@
+# YUNA-System Docker Compose
+# Usage: docker compose up -d
+
+services:
+  yuna:
+    image: ghcr.io/justzacca/yuna-system:latest
+    container_name: yuna-system
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Anime download folder - change left side to your path
+      - /path/to/your/anime:/downloads
+      # Config persistence
+      - ./config.json:/app/config.json
+    # Optional: if you need to access logs
+    # logging:
+    #   driver: "json-file"
+    #   options:
+    #     max-size: "10m"
+    #     max-file: "3"
