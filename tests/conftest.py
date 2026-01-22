@@ -46,6 +46,8 @@ def mock_env(monkeypatch) -> Dict[str, str]:
         - UPDATE_TIME: Update interval in seconds
         - BASE_URL_SC: Mock streaming URL
 
+    Also patches load_dotenv to prevent loading from .env file.
+
     Returns:
         Dict[str, str]: Dictionary of mocked environment variables.
     """
@@ -365,6 +367,24 @@ def reset_animeworld_cache():
     airi._animeworld_url_cache = None
     yield
     airi._animeworld_url_cache = None
+
+
+@pytest.fixture(autouse=True)
+def cleanup_default_db():
+    """
+    Removes the default yuna.db file before each test to ensure test isolation.
+
+    This prevents tests from interfering with each other through
+    the shared default database file.
+    """
+    import os
+    db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "yuna.db")
+    if os.path.exists(db_path):
+        os.remove(db_path)
+    yield
+    # Also cleanup after test
+    if os.path.exists(db_path):
+        os.remove(db_path)
 
 
 @pytest.fixture

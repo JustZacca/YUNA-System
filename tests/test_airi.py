@@ -42,11 +42,13 @@ class TestAiriInitialization:
         monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
         monkeypatch.setenv("DESTINATION_FOLDER", "/tmp/test")
 
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        # Patch load_dotenv in the airi module to prevent loading .env file
+        with patch("airi.load_dotenv"):
+            with patch("airi.httpx", mock_httpx):
+                from airi import Airi
 
-            with pytest.raises(ValueError, match="TELEGRAM_CHAT_ID non configurato"):
-                Airi(db_path=temp_db)
+                with pytest.raises(ValueError, match="TELEGRAM_CHAT_ID non configurato"):
+                    Airi(db_path=temp_db)
 
     def test_airi_initialization_invalid_chat_id(self, monkeypatch, temp_db, mock_httpx):
         """Verify that Airi raises error when TELEGRAM_CHAT_ID is not a number."""
@@ -67,11 +69,13 @@ class TestAiriInitialization:
         monkeypatch.setenv("DESTINATION_FOLDER", "/tmp/test")
         monkeypatch.delenv("UPDATE_TIME", raising=False)
 
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        # Patch load_dotenv in the airi module to prevent loading .env file
+        with patch("airi.load_dotenv"):
+            with patch("airi.httpx", mock_httpx):
+                from airi import Airi
 
-            airi = Airi(db_path=temp_db)
-            assert airi.UPDATE_TIME == 60, "Default UPDATE_TIME should be 60"
+                airi = Airi(db_path=temp_db)
+                assert airi.UPDATE_TIME == 60, "Default UPDATE_TIME should be 60"
 
     def test_airi_database_initialized(self, mock_env, temp_db, mock_httpx):
         """Verify that Airi initializes the database correctly."""
