@@ -73,7 +73,8 @@ class Airi:
     def __init__(self, db_path: str = "yuna.db"):
         load_dotenv()  # Carica il file .env nella environment
 
-        self.destination_folder = os.getenv("DESTINATION_FOLDER")
+        # Default a /downloads per compatibilità con Docker
+        self.destination_folder = os.getenv("DESTINATION_FOLDER", "/downloads")
         self.telegram_token = os.getenv("TELEGRAM_TOKEN")
         # Gestione errore per TELEGRAM_CHAT_ID non valido
         telegram_chat_id_str = os.getenv("TELEGRAM_CHAT_ID")
