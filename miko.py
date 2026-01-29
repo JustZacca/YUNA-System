@@ -272,7 +272,7 @@ class Miko:
         except Exception as e:
             return (ep.number, False, str(e), None)
 
-    async def _download_single_episode(self, ep, anime_name, folder):
+    async def _download_single_episode(self, ep, anime_name, folder, progress_callback=None):
         """
         Scarica un singolo episodio usando asyncio.to_thread per non bloccare.
         Il semaphore limita a 3 download simultanei.
@@ -280,6 +280,10 @@ class Miko:
         async with self.download_semaphore:
             title = f"{anime_name} - Episode {ep.number}"
             logger.info(f"Inizio download: {title}", extra={"classname": self.__class__.__name__})
+
+            # Notify start
+            if progress_callback:
+                await progress_callback(ep.number, 0.1, done=False)
 
             # Esegui il download sincrono in un thread separato
             result = await asyncio.to_thread(
@@ -293,14 +297,23 @@ class Miko:
                 logger.info(f"Completato download: Episode {ep_number}", extra={"classname": self.__class__.__name__})
                 if last_modified:
                     self.airi.update_last_update(anime_name, last_modified)
+                # Notify complete
+                if progress_callback:
+                    await progress_callback(ep.number, 1.0, done=True)
             else:
                 logger.error(f"Fallito download Episode {ep_number}: {error_msg}", extra={"classname": self.__class__.__name__})
+                if progress_callback:
+                    await progress_callback(ep.number, 0.0, done=True)
 
             return result
 
-    async def downloadEpisodes(self, episode_list):
+    async def downloadEpisodes(self, episode_list, progress_callback=None):
         """
         Scarica episodi in parallelo (max 3 alla volta) senza bloccare l'event loop.
+
+        Args:
+            episode_list: List of episode numbers to download
+            progress_callback: Optional async callback(ep_num, progress, done)
         """
         if self.anime is None:
             logger.warning("Nessun anime caricato.", extra={"classname": self.__class__.__name__})
@@ -316,7 +329,7 @@ class Miko:
 
         # Crea task per tutti gli episodi - il semaphore gestirà il limite
         tasks = [
-            self._download_single_episode(ep, self.anime_name, self.anime_folder)
+            self._download_single_episode(ep, self.anime_name, self.anime_folder, progress_callback)
             for ep in episodes
         ]
 

@@ -1,6 +1,7 @@
 """
 Download Manager for YUNA-System.
 Handles download queue, parallel downloads, and Telegram progress updates.
+Provides unified progress bar for all active downloads (anime, series, films).
 """
 
 import asyncio
@@ -8,7 +9,7 @@ import time
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict
 from enum import Enum
 from collections import deque
 
@@ -395,5 +396,238 @@ class DownloadManager:
                     del self.completed[oldest.id]
 
 
-# Global download manager instance
+@dataclass
+class ActiveDownload:
+    """Represents an active download for the unified tracker."""
+    id: str
+    name: str
+    type: str  # "anime", "series", "film"
+    progress: float = 0.0
+    status: str = "pending"  # pending, downloading, completed, failed
+    details: str = ""  # e.g. "S01E05" or "Ep 12"
+    started_at: float = field(default_factory=time.time)
+
+
+class UnifiedProgressTracker:
+    """
+    Unified progress tracker that shows all active downloads in a single Telegram message.
+    Updates periodically with progress for anime, series, and films.
+    """
+
+    def __init__(self, bot, chat_id: int, update_interval: float = 4.0):
+        """
+        Initialize unified tracker.
+
+        Args:
+            bot: Telegram bot instance
+            chat_id: Chat ID for progress message
+            update_interval: Seconds between updates
+        """
+        self.bot = bot
+        self.chat_id = chat_id
+        self.update_interval = update_interval
+        self.message_id: Optional[int] = None
+        self.downloads: Dict[str, ActiveDownload] = {}
+        self._running = False
+        self._update_task: Optional[asyncio.Task] = None
+        self._lock = asyncio.Lock()
+        self._last_text = ""
+
+    async def start(self):
+        """Start the tracker and send initial message."""
+        if self._running:
+            return
+
+        self._running = True
+
+        # Send initial message
+        msg = await self.bot.send_message(
+            chat_id=self.chat_id,
+            text="📥 *Download Manager*\n\nNessun download attivo.",
+            parse_mode="Markdown"
+        )
+        self.message_id = msg.message_id
+
+        # Start update loop
+        self._update_task = asyncio.create_task(self._update_loop())
+        logger.info("Unified progress tracker started")
+
+    async def stop(self):
+        """Stop the tracker."""
+        self._running = False
+        if self._update_task:
+            self._update_task.cancel()
+            try:
+                await self._update_task
+            except asyncio.CancelledError:
+                pass
+
+        # Final message
+        if self.message_id:
+            try:
+                await self.bot.edit_message_text(
+                    chat_id=self.chat_id,
+                    message_id=self.message_id,
+                    text="📥 *Download Manager*\n\n✅ Tutti i download completati.",
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+
+    def add_download(self, download_id: str, name: str, dtype: str, details: str = "") -> str:
+        """
+        Add a download to track.
+
+        Args:
+            download_id: Unique ID for this download
+            name: Display name (anime/series/film name)
+            dtype: Type ("anime", "series", "film")
+            details: Additional details (e.g. "S01E05")
+
+        Returns:
+            The download ID
+        """
+        self.downloads[download_id] = ActiveDownload(
+            id=download_id,
+            name=name,
+            type=dtype,
+            details=details,
+            status="pending"
+        )
+        logger.debug(f"Added download to tracker: {name} ({dtype})")
+        return download_id
+
+    def update_progress(self, download_id: str, progress: float, status: str = "downloading"):
+        """Update progress for a download."""
+        if download_id in self.downloads:
+            self.downloads[download_id].progress = progress
+            self.downloads[download_id].status = status
+
+    def complete_download(self, download_id: str, success: bool = True):
+        """Mark a download as complete."""
+        if download_id in self.downloads:
+            self.downloads[download_id].status = "completed" if success else "failed"
+            self.downloads[download_id].progress = 1.0 if success else self.downloads[download_id].progress
+
+    def remove_download(self, download_id: str):
+        """Remove a download from tracking."""
+        if download_id in self.downloads:
+            del self.downloads[download_id]
+
+    async def _update_loop(self):
+        """Background loop to update the progress message."""
+        while self._running:
+            try:
+                await self._update_message()
+                await asyncio.sleep(self.update_interval)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"Progress update error: {e}")
+                await asyncio.sleep(self.update_interval)
+
+    async def _update_message(self):
+        """Update the Telegram message with current progress."""
+        if not self.message_id:
+            return
+
+        async with self._lock:
+            text = self._build_message()
+
+            # Skip if no change
+            if text == self._last_text:
+                return
+
+            self._last_text = text
+
+            try:
+                await self.bot.edit_message_text(
+                    chat_id=self.chat_id,
+                    message_id=self.message_id,
+                    text=text,
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                # Ignore "message not modified" errors
+                if "not modified" not in str(e).lower():
+                    logger.debug(f"Message update error: {e}")
+
+    def _build_message(self) -> str:
+        """Build the progress message text."""
+        lines = ["📥 *Download Manager*\n"]
+
+        # Filter active downloads
+        active = [d for d in self.downloads.values() if d.status in ("pending", "downloading")]
+        completed = [d for d in self.downloads.values() if d.status == "completed"]
+        failed = [d for d in self.downloads.values() if d.status == "failed"]
+
+        if not active and not completed and not failed:
+            lines.append("Nessun download attivo.")
+            return "\n".join(lines)
+
+        # Show active downloads
+        if active:
+            # Group by type
+            by_type = {}
+            for d in active:
+                if d.type not in by_type:
+                    by_type[d.type] = []
+                by_type[d.type].append(d)
+
+            type_icons = {"anime": "🎌", "series": "📺", "film": "🎬"}
+
+            for dtype, downloads in by_type.items():
+                icon = type_icons.get(dtype, "📥")
+                lines.append(f"\n{icon} *{dtype.upper()}*")
+
+                for d in downloads:
+                    bar = self._progress_bar(d.progress)
+                    detail_str = f" ({d.details})" if d.details else ""
+                    status_icon = "⏳" if d.status == "pending" else "📥"
+                    lines.append(f"{status_icon} {d.name}{detail_str}")
+                    lines.append(f"   `{bar}` {d.progress:.0%}")
+
+        # Show recently completed (last 5)
+        if completed:
+            recent = sorted(completed, key=lambda x: x.started_at, reverse=True)[:3]
+            if recent:
+                lines.append("\n✅ *Completati:*")
+                for d in recent:
+                    lines.append(f"• {d.name}")
+
+        # Show failed
+        if failed:
+            lines.append("\n❌ *Falliti:*")
+            for d in failed:
+                lines.append(f"• {d.name}")
+
+        # Clean up completed/failed after showing
+        for d in completed + failed:
+            # Remove after 30 seconds
+            if time.time() - d.started_at > 30:
+                self.remove_download(d.id)
+
+        return "\n".join(lines)
+
+    def _progress_bar(self, progress: float, width: int = 10) -> str:
+        """Build ASCII progress bar."""
+        filled = int(width * progress)
+        return "█" * filled + "░" * (width - filled)
+
+    @property
+    def has_active_downloads(self) -> bool:
+        """Check if there are active downloads."""
+        return any(d.status in ("pending", "downloading") for d in self.downloads.values())
+
+
+# Global instances
 download_manager = DownloadManager(max_parallel=2)
+unified_tracker: Optional[UnifiedProgressTracker] = None
+
+
+def get_unified_tracker(bot, chat_id: int) -> UnifiedProgressTracker:
+    """Get or create the unified tracker instance."""
+    global unified_tracker
+    if unified_tracker is None:
+        unified_tracker = UnifiedProgressTracker(bot, chat_id)
+    return unified_tracker

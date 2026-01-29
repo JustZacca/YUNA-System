@@ -3,7 +3,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 import miko
 from miko import MikoSC
 from airi import Airi
-from download_manager import download_manager, TelegramProgress
+from download_manager import download_manager, TelegramProgress, get_unified_tracker, UnifiedProgressTracker
 import os
 import logging
 from color_utils import ColoredFormatter
@@ -55,6 +55,10 @@ class Kan:
         # Conversation states for SC
         self.SC_SEARCH = 10
         self.SC_SELECT_SEASON = 11
+
+        # Unified download tracker (single progress message for all downloads)
+        self.unified_tracker: UnifiedProgressTracker = None
+        self._download_counter = 0
 
     # Function to start conversation with /aggiungi_anime
     async def aggiungi_anime(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -414,10 +418,10 @@ class Kan:
                         parse_mode="Markdown"
                     )
                 # Passa direttamente la lista invece di usare variabile di istanza
-                await self._download_episodes_for_anime(missing_episodes_list, anime_name)
+                await self._download_episodes_for_anime(missing_episodes_list, anime_name, bot=context.bot)
                 await context.bot.send_message(
                     chat_id=self.AUTHORIZED_USER_ID,
-                    text=f"Tutti gli episodi di {anime_name} sono stati scaricati.",
+                    text=f"✅ Tutti gli episodi di {anime_name} sono stati scaricati.",
                     parse_mode="Markdown"
                 )
             else:
@@ -429,14 +433,54 @@ class Kan:
             text="Controllo episodi completato. Tutti gli anime sono aggiornati."
         )
 
-    async def _download_episodes_for_anime(self, episodes_list: list, anime_name: str) -> bool:
-        """Helper method per scaricare episodi senza usare variabili di istanza condivise."""
+    async def _ensure_tracker(self, bot):
+        """Ensure unified tracker is running."""
+        if self.unified_tracker is None:
+            self.unified_tracker = get_unified_tracker(bot, self.AUTHORIZED_USER_ID)
+            await self.unified_tracker.start()
+        return self.unified_tracker
+
+    def _next_download_id(self, prefix: str = "dl") -> str:
+        """Generate unique download ID."""
+        self._download_counter += 1
+        return f"{prefix}_{self._download_counter}"
+
+    async def _download_episodes_for_anime(self, episodes_list: list, anime_name: str, bot=None) -> bool:
+        """Helper method per scaricare episodi con tracking unificato."""
         try:
             if not episodes_list:
                 self.logger.info(f"Nessun episodio da scaricare per {anime_name}.")
                 return False
-            await self.miko_instance.downloadEpisodes(episodes_list)
+
+            # Setup unified tracker if bot available
+            tracker = None
+            download_ids = []
+            if bot:
+                tracker = await self._ensure_tracker(bot)
+                for ep_num in episodes_list:
+                    dl_id = self._next_download_id("anime")
+                    tracker.add_download(dl_id, anime_name, "anime", f"Ep {ep_num}")
+                    download_ids.append((dl_id, ep_num))
+
+            # Start download with progress callback
+            async def update_episode_progress(ep_num, progress, done=False):
+                if tracker:
+                    for dl_id, ep in download_ids:
+                        if ep == ep_num:
+                            if done:
+                                tracker.complete_download(dl_id, success=True)
+                            else:
+                                tracker.update_progress(dl_id, progress)
+                            break
+
+            await self.miko_instance.downloadEpisodes(episodes_list, progress_callback=update_episode_progress)
             self.logger.info(f"Download completato per {anime_name}.")
+
+            # Mark all as complete
+            if tracker:
+                for dl_id, _ in download_ids:
+                    tracker.complete_download(dl_id, success=True)
+
             return True
         except Exception as e:
             self.logger.error(f"Errore download per {anime_name}: {e}")
@@ -860,46 +904,44 @@ class Kan:
                 # Download single season in background
                 season_num = int(season_str)
 
-                # Send initial progress message
-                progress_msg = await bot.send_message(
-                    chat_id=chat_id,
-                    text=f"📥 *{series_info.name}* - Stagione {season_num}\n"
-                         f"`[░░░░░░░░░░]` 0%\n"
-                         f"Avvio download...",
-                    parse_mode="Markdown"
-                )
+                # Ensure tracker is running
+                tracker = await self._ensure_tracker(bot)
 
                 await query.edit_message_text(
                     f"✅ Download avviato in background.\n"
-                    f"Puoi continuare ad usare il bot.",
+                    f"Controlla il messaggio di progresso.",
                     parse_mode="Markdown"
                 )
 
                 # Start background download task
                 asyncio.create_task(
                     self._download_season_background(
-                        bot, chat_id, progress_msg.message_id,
-                        series_info, season_num
+                        bot, chat_id, series_info, season_num, tracker
                     )
                 )
 
-    async def _download_season_background(self, bot, chat_id, message_id, series_info, season_num):
-        """Background task to download a season with progress updates."""
-        progress = TelegramProgress(bot, chat_id, message_id)
+    async def _download_season_background(self, bot, chat_id, series_info, season_num, tracker):
+        """Background task to download a season with unified tracker."""
+        download_ids = {}
         results = {"success": 0, "failed": 0, "total": 0}
 
         async def episode_progress(completed, total, ep_num, success):
             results["total"] = total
+
+            # Add download to tracker on first callback for this episode
+            if ep_num not in download_ids:
+                dl_id = self._next_download_id("series")
+                download_ids[ep_num] = dl_id
+                tracker.add_download(dl_id, series_info.name, "series", f"S{season_num:02d}E{ep_num:02d}")
+
+            dl_id = download_ids[ep_num]
+
             if success:
                 results["success"] += 1
+                tracker.complete_download(dl_id, success=True)
             else:
                 results["failed"] += 1
-
-            await progress.update(
-                progress=completed / total,
-                text=f"{series_info.name} S{season_num:02d}",
-                elapsed=0
-            )
+                tracker.complete_download(dl_id, success=False)
 
         try:
             download_results = await self.miko_sc.download_season(
@@ -907,46 +949,24 @@ class Kan:
                 progress_callback=episode_progress
             )
 
-            # Final message
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=f"✅ *{series_info.name}* - Stagione {season_num}\n"
-                     f"Completato: {results['success']}/{results['total']} episodi\n"
-                     f"{'❌ Falliti: ' + str(results['failed']) if results['failed'] else ''}",
-                parse_mode="Markdown"
-            )
+            self.logger.info(f"Season download completed: {series_info.name} S{season_num} - {results['success']}/{results['total']}")
+
         except Exception as e:
             self.logger.error(f"Background download error: {e}")
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=f"❌ Errore download: {e}",
-                parse_mode="Markdown"
-            )
+            # Mark any active downloads as failed
+            for dl_id in download_ids.values():
+                tracker.complete_download(dl_id, success=False)
 
     async def _download_all_seasons_background(self, bot, chat_id, series_info):
         """Background task to download all seasons."""
-        total_seasons = len(series_info.seasons)
+        tracker = await self._ensure_tracker(bot)
 
-        for i, season in enumerate(series_info.seasons):
-            progress_msg = await bot.send_message(
-                chat_id=chat_id,
-                text=f"📥 *{series_info.name}* - Stagione {season.number} ({i+1}/{total_seasons})\n"
-                     f"`[░░░░░░░░░░]` 0%",
-                parse_mode="Markdown"
-            )
-
+        for season in series_info.seasons:
             await self._download_season_background(
-                bot, chat_id, progress_msg.message_id,
-                series_info, season.number
+                bot, chat_id, series_info, season.number, tracker
             )
 
-        await bot.send_message(
-            chat_id=chat_id,
-            text=f"🎉 *{series_info.name}*\nTutte le stagioni completate!",
-            parse_mode="Markdown"
-        )
+        self.logger.info(f"All seasons completed: {series_info.name}")
 
     async def handle_sc_download_film(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle film download."""
@@ -967,76 +987,48 @@ class Kan:
                 item = results[idx]
                 self.miko_sc.current_item = item
 
-                chat_id = query.message.chat_id
                 bot = context.bot
 
                 # Add to library
                 self.miko_sc.add_film_to_library(item)
 
-                # Send progress message
-                progress_msg = await bot.send_message(
-                    chat_id=chat_id,
-                    text=f"📥 *{item.name}*\n"
-                         f"`[░░░░░░░░░░]` 0%\n"
-                         f"Avvio download...",
-                    parse_mode="Markdown"
-                )
+                # Ensure tracker is running
+                tracker = await self._ensure_tracker(bot)
 
                 await query.edit_message_text(
                     f"✅ Download avviato in background.\n"
-                    f"Puoi continuare ad usare il bot.",
+                    f"Controlla il messaggio di progresso.",
                     parse_mode="Markdown"
                 )
 
                 # Start background download task
                 asyncio.create_task(
-                    self._download_film_background(
-                        bot, chat_id, progress_msg.message_id, item
-                    )
+                    self._download_film_background(bot, item, tracker)
                 )
 
-    async def _download_film_background(self, bot, chat_id, message_id, item):
-        """Background task to download a film with progress updates."""
-        progress = TelegramProgress(bot, chat_id, message_id)
-        start_time = asyncio.get_event_loop().time()
+    async def _download_film_background(self, bot, item, tracker):
+        """Background task to download a film with unified tracker."""
+        dl_id = self._next_download_id("film")
+        tracker.add_download(dl_id, item.name, "film")
 
         async def film_progress(prog, elapsed, size):
-            self.logger.debug(f"Film progress: {prog:.1%} - {size}")
-            await progress.update(
-                progress=prog,
-                text=item.name,
-                elapsed=elapsed,
-                size=size
-            )
+            tracker.update_progress(dl_id, prog)
 
         try:
             success, result = await self.miko_sc.download_film(
                 item, progress_callback=film_progress
             )
 
-            elapsed = asyncio.get_event_loop().time() - start_time
+            tracker.complete_download(dl_id, success=success)
 
             if success:
-                await bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=f"✅ *{item.name}*\n"
-                         f"Download completato!\n"
-                         f"⏱️ Tempo: {int(elapsed//60)}:{int(elapsed%60):02d}",
-                    parse_mode="Markdown"
-                )
                 self.logger.info(f"Film download completed: {item.name}")
             else:
-                await bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=f"❌ *{item.name}*\nErrore: {result}",
-                    parse_mode="Markdown"
-                )
                 self.logger.error(f"Film download failed: {item.name} - {result}")
 
         except Exception as e:
             self.logger.error(f"Background film download error: {e}")
+            tracker.complete_download(dl_id, success=False)
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
