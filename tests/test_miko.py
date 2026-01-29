@@ -706,3 +706,310 @@ class TestSaveAnimeCover:
                 result = await miko.saveAnimeCover()
 
                 assert result is False
+
+
+# ==================== MIKO SC TESTS ====================
+
+class TestMikoSCInitialization:
+    """Tests for MikoSC class initialization."""
+
+    def test_miko_sc_initialization(self, mock_env, temp_db, mock_httpx):
+        """Verify that MikoSC initializes with correct default values."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+
+                    miko_sc = MikoSC()
+
+                    assert miko_sc.name == "MikoSC"
+                    assert miko_sc.version == "1.0.0"
+                    assert miko_sc.current_series is None
+                    assert miko_sc.current_item is None
+                    assert miko_sc.search_results == []
+
+    def test_miko_sc_has_download_semaphore(self, mock_env, temp_db, mock_httpx):
+        """Verify that MikoSC has a download semaphore."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+
+                    miko_sc = MikoSC()
+
+                    assert miko_sc.download_semaphore is not None
+                    assert isinstance(miko_sc.download_semaphore, asyncio.Semaphore)
+
+    def test_miko_sc_custom_folders(self, mock_env, temp_db, temp_download_folder, mock_httpx):
+        """Verify that MikoSC accepts custom folder paths."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+
+                    movies_folder = os.path.join(temp_download_folder, "films")
+                    series_folder = os.path.join(temp_download_folder, "tv")
+
+                    miko_sc = MikoSC(
+                        movies_folder=movies_folder,
+                        series_folder=series_folder
+                    )
+
+                    assert miko_sc.movies_folder == movies_folder
+                    assert miko_sc.series_folder == series_folder
+
+
+class TestMikoSCSearch:
+    """Tests for MikoSC search methods."""
+
+    def test_search_stores_results(self, mock_env, temp_db, mock_httpx):
+        """Verify that search stores results in search_results."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+                    from streamingcommunity import MediaItem
+
+                    miko_sc = MikoSC()
+
+                    mock_results = [
+                        MediaItem(id=1, name="Result 1", slug="result-1", type="movie"),
+                        MediaItem(id=2, name="Result 2", slug="result-2", type="tv"),
+                    ]
+
+                    with patch.object(miko_sc.sc.client, "search", return_value=mock_results):
+                        results = miko_sc.search("test query")
+
+                    assert len(results) == 2
+                    assert miko_sc.search_results == results
+
+    def test_search_films_filters_movies(self, mock_env, temp_db, mock_httpx):
+        """Verify that search_films returns only movies."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+                    from streamingcommunity import MediaItem
+
+                    miko_sc = MikoSC()
+
+                    mock_results = [
+                        MediaItem(id=1, name="Movie", slug="movie", type="movie"),
+                        MediaItem(id=2, name="Series", slug="series", type="tv"),
+                    ]
+
+                    with patch.object(miko_sc.sc.client, "search", return_value=mock_results):
+                        results = miko_sc.search_films("test")
+
+                    assert len(results) == 1
+                    assert results[0].type == "movie"
+
+    def test_search_series_filters_tv(self, mock_env, temp_db, mock_httpx):
+        """Verify that search_series returns only TV shows."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+                    from streamingcommunity import MediaItem
+
+                    miko_sc = MikoSC()
+
+                    mock_results = [
+                        MediaItem(id=1, name="Movie", slug="movie", type="movie"),
+                        MediaItem(id=2, name="Series", slug="series", type="tv"),
+                    ]
+
+                    with patch.object(miko_sc.sc.client, "search", return_value=mock_results):
+                        results = miko_sc.search_series("test")
+
+                    assert len(results) == 1
+                    assert results[0].type == "tv"
+
+
+class TestMikoSCSelection:
+    """Tests for MikoSC selection methods."""
+
+    def test_select_from_results_valid_index(self, mock_env, temp_db, mock_httpx):
+        """Verify that valid index selection works."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+                    from streamingcommunity import MediaItem
+
+                    miko_sc = MikoSC()
+                    miko_sc.search_results = [
+                        MediaItem(id=1, name="Item 1", slug="item-1", type="movie"),
+                        MediaItem(id=2, name="Item 2", slug="item-2", type="tv"),
+                    ]
+
+                    selected = miko_sc.select_from_results(1)
+
+                    assert selected is not None
+                    assert selected.name == "Item 2"
+                    assert miko_sc.current_item == selected
+
+    def test_select_from_results_invalid_index(self, mock_env, temp_db, mock_httpx):
+        """Verify that invalid index returns None."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+                    from streamingcommunity import MediaItem
+
+                    miko_sc = MikoSC()
+                    miko_sc.search_results = [
+                        MediaItem(id=1, name="Item 1", slug="item-1", type="movie"),
+                    ]
+
+                    selected = miko_sc.select_from_results(99)
+
+                    assert selected is None
+
+
+class TestMikoSCLibrary:
+    """Tests for MikoSC library operations."""
+
+    def test_add_series_to_library(self, mock_env, temp_db, mock_httpx, mock_sc_media_item, mock_sc_series_info):
+        """Verify that series can be added to library."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+
+                    miko_sc = MikoSC()
+                    miko_sc.current_item = mock_sc_media_item
+
+                    with patch.object(miko_sc.sc, "get_series_info", return_value=mock_sc_series_info):
+                        with patch.object(miko_sc.sc, "get_season_episodes", return_value=[]):
+                            result = miko_sc.add_series_to_library()
+
+                    assert result is True
+
+                    # Verify in database
+                    series = miko_sc.db.get_tv_by_name("Test Series")
+                    assert series is not None
+
+    def test_add_series_to_library_no_item(self, mock_env, temp_db, mock_httpx):
+        """Verify that adding series fails when no item selected."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+
+                    miko_sc = MikoSC()
+                    miko_sc.current_item = None
+
+                    result = miko_sc.add_series_to_library()
+
+                    assert result is False
+
+    def test_get_library_series(self, mock_env, temp_db, mock_httpx):
+        """Verify that library series are retrieved."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+                    from datetime import datetime
+
+                    miko_sc = MikoSC()
+
+                    # Add a series directly to database
+                    miko_sc.db.add_tv(
+                        name="Library Series",
+                        link="/test",
+                        last_update=datetime.now(),
+                        numero_episodi=10
+                    )
+
+                    series_list = miko_sc.get_library_series()
+
+                    assert len(series_list) >= 1
+                    names = [s["name"] for s in series_list]
+                    assert "Library Series" in names
+
+    def test_remove_series(self, mock_env, temp_db, mock_httpx):
+        """Verify that series can be removed from library."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+                    from datetime import datetime
+
+                    miko_sc = MikoSC()
+
+                    # Add then remove
+                    miko_sc.db.add_tv(
+                        name="To Remove",
+                        link="/test",
+                        last_update=datetime.now(),
+                        numero_episodi=5
+                    )
+
+                    result = miko_sc.remove_series("To Remove")
+
+                    assert result is True
+                    assert miko_sc.db.get_tv_by_name("To Remove") is None
+
+
+class TestMikoSCMissingEpisodes:
+    """Tests for missing episodes detection."""
+
+    def test_get_missing_episodes_no_series(self, mock_env, temp_db, mock_httpx):
+        """Verify that missing episodes returns empty for non-existent series."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+
+                    miko_sc = MikoSC()
+
+                    missing = miko_sc.get_missing_episodes("Non Existent Series")
+
+                    assert missing == {}
+
+    def test_update_downloaded_episode(self, mock_env, temp_db, mock_httpx):
+        """Verify that downloaded episode is tracked correctly."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from miko import MikoSC
+                    from datetime import datetime
+                    import json
+
+                    miko_sc = MikoSC()
+
+                    # Add series
+                    miko_sc.db.add_tv(
+                        name="Track Series",
+                        link="/test",
+                        last_update=datetime.now(),
+                        numero_episodi=10
+                    )
+
+                    # Update downloaded episodes
+                    miko_sc._update_downloaded_episode("Track Series", 1, 1)
+                    miko_sc._update_downloaded_episode("Track Series", 1, 2)
+                    miko_sc._update_downloaded_episode("Track Series", 1, 3)
+
+                    # Check database
+                    series = miko_sc.db.get_tv_by_name("Track Series")
+                    seasons_data = json.loads(series["seasons_data"])
+
+                    assert "1" in seasons_data
+                    assert seasons_data["1"]["downloaded"] == [1, 2, 3]
+                    assert series["episodi_scaricati"] == 3

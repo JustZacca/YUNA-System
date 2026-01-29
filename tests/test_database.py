@@ -96,7 +96,8 @@ class TestDatabaseInitialization:
 
     def test_database_default_path(self):
         """Verify that the default database path constant is set correctly."""
-        assert DEFAULT_DB_PATH == "yuna.db", "Default path should be yuna.db"
+        # Default path uses environment variable or fallback to /data/yuna.db
+        assert DEFAULT_DB_PATH.endswith("yuna.db"), "Default path should end with yuna.db"
 
 
 class TestAnimeCRUD:
@@ -417,6 +418,79 @@ class TestTVCRUD:
         assert len(tv_list) == 1, "Should return the added TV show"
         assert tv_list[0]["name"] == sample_tv_data["name"]
 
+    def test_add_tv_with_sc_fields(self, temp_db):
+        """Verify that TV shows with StreamingCommunity fields are stored correctly."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        result = db.add_tv(
+            name="SC Series",
+            link="https://sc.com/titles/123-sc-series",
+            last_update=now,
+            numero_episodi=50,
+            slug="sc-series",
+            media_id=123,
+            provider_language="it",
+            year="2020",
+            provider="streamingcommunity"
+        )
+
+        assert result is True
+
+        tv = db.get_tv_by_name("SC Series")
+        assert tv["slug"] == "sc-series"
+        assert tv["media_id"] == 123
+        assert tv["provider"] == "streamingcommunity"
+        assert tv["year"] == "2020"
+
+    def test_update_tv_seasons_data(self, temp_db):
+        """Verify that seasons_data JSON field can be updated."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        db.add_tv("Test Series", "/link", now, 20)
+
+        seasons_json = '{"1": {"total": 10, "downloaded": [1, 2, 3]}}'
+        result = db.update_tv_seasons_data("Test Series", seasons_json)
+
+        assert result is True
+
+        tv = db.get_tv_by_name("Test Series")
+        assert tv["seasons_data"] == seasons_json
+
+    def test_search_tv_by_name(self, temp_db):
+        """Verify that TV show search works with partial name."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        db.add_tv("Breaking Bad", "/link", now, 62)
+
+        tv = db.search_tv_by_name("breaking")
+        assert tv is not None
+        assert tv["name"] == "Breaking Bad"
+
+    def test_get_tv_link(self, temp_db):
+        """Verify that TV show link is retrieved correctly."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        db.add_tv("Link Test", "/titles/link-test", now, 10)
+
+        link = db.get_tv_link("Link")
+        assert link == "/titles/link-test"
+
+    def test_remove_tv(self, temp_db):
+        """Verify that TV show can be removed."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        db.add_tv("To Remove", "/link", now, 10)
+        assert db.get_tv_by_name("To Remove") is not None
+
+        result = db.remove_tv("To Remove")
+        assert result is True
+        assert db.get_tv_by_name("To Remove") is None
+
 
 class TestMoviesCRUD:
     """Tests for movies CRUD operations."""
@@ -480,6 +554,116 @@ class TestMoviesCRUD:
         movies_list = db.get_all_movies()
         assert len(movies_list) == 1, "Should return the added movie"
         assert movies_list[0]["name"] == sample_movie_data["name"]
+
+    def test_add_movie_with_sc_fields(self, temp_db):
+        """Verify that movies with StreamingCommunity fields are stored correctly."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        result = db.add_movie(
+            name="SC Movie",
+            link="https://sc.com/titles/456-sc-movie",
+            last_update=now,
+            slug="sc-movie",
+            media_id=456,
+            provider_language="it",
+            year="1999",
+            provider="streamingcommunity"
+        )
+
+        assert result is True
+
+        movie = db.get_movie_by_name("SC Movie")
+        assert movie["slug"] == "sc-movie"
+        assert movie["media_id"] == 456
+        assert movie["provider"] == "streamingcommunity"
+        assert movie["year"] == "1999"
+
+    def test_update_movie_downloaded(self, temp_db):
+        """Verify that movie download status can be updated."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        db.add_movie("Download Test", "/link", now)
+
+        # Initially not downloaded
+        movie = db.get_movie_by_name("Download Test")
+        assert movie["scaricato"] == 0
+
+        result = db.update_movie_downloaded("Download Test", 1)
+        assert result is True
+
+        movie = db.get_movie_by_name("Download Test")
+        assert movie["scaricato"] == 1
+
+    def test_get_pending_movies(self, temp_db):
+        """Verify that pending movies are retrieved correctly."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        # Add downloaded movie
+        db.add_movie("Downloaded", "/link1", now)
+        db.update_movie_downloaded("Downloaded", 1)
+
+        # Add pending movies
+        db.add_movie("Pending 1", "/link2", now)
+        db.add_movie("Pending 2", "/link3", now)
+
+        pending = db.get_pending_movies()
+
+        assert len(pending) == 2
+        names = [m["name"] for m in pending]
+        assert "Pending 1" in names
+        assert "Pending 2" in names
+        assert "Downloaded" not in names
+
+    def test_search_movie_by_name(self, temp_db):
+        """Verify that movie search works with partial name."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        db.add_movie("The Matrix Reloaded", "/link", now)
+
+        movie = db.search_movie_by_name("matrix")
+        assert movie is not None
+        assert movie["name"] == "The Matrix Reloaded"
+
+    def test_get_movie_link(self, temp_db):
+        """Verify that movie link is retrieved correctly."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        db.add_movie("Link Movie", "/titles/link-movie", now)
+
+        link = db.get_movie_link("Link")
+        assert link == "/titles/link-movie"
+
+    def test_remove_movie(self, temp_db):
+        """Verify that movie can be removed."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        db.add_movie("To Remove", "/link", now)
+        assert db.get_movie_by_name("To Remove") is not None
+
+        result = db.remove_movie("To Remove")
+        assert result is True
+        assert db.get_movie_by_name("To Remove") is None
+
+    def test_update_movie_last_update(self, temp_db):
+        """Verify that movie last_update timestamp can be updated."""
+        db = Database(temp_db)
+        now = datetime.now()
+
+        db.add_movie("Update Test", "/link", now)
+
+        new_date = datetime(2025, 1, 15, 10, 30, 0)
+        result = db.update_movie_last_update("Update Test", new_date)
+
+        assert result is True
+
+        movie = db.get_movie_by_name("Update Test")
+        assert "2025-01-15" in movie["last_update"]
 
 
 class TestMigrationFromJSON:

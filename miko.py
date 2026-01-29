@@ -386,3 +386,499 @@ class Miko:
         except Exception as e:
             logger.error(f"Errore durante la ricerca di '{anime_name}': {e}", extra={"classname": self.__class__.__name__})
             return []
+
+
+# ==================== MIKO SC - StreamingCommunity Extension ====================
+
+from streamingcommunity import StreamingCommunity, MediaItem, SeriesInfo, Episode
+from database import Database
+import json
+
+
+class MikoSC:
+    """
+    Media Indexing and Kapturing Operator for StreamingCommunity.
+    Handles TV series and movies from StreamingCommunity.
+    """
+
+    def __init__(self, movies_folder: str = None, series_folder: str = None):
+        self.name = "MikoSC"
+        self.description = "StreamingCommunity extension for MIKO"
+        self.version = "1.0.0"
+
+        # Get folders from Airi config
+        self.airi = Airi()
+        base_folder = self.airi.get_destination_folder()
+
+        self.movies_folder = movies_folder or os.path.join(base_folder, "Film")
+        self.series_folder = series_folder or os.path.join(base_folder, "Serie TV")
+
+        # Initialize StreamingCommunity client
+        self.sc = StreamingCommunity(
+            movies_folder=self.movies_folder,
+            series_folder=self.series_folder
+        )
+
+        # Database for persistence
+        self.db = Database()
+
+        # Current selection state
+        self.current_series: SeriesInfo = None
+        self.current_item: MediaItem = None
+        self.search_results: list = []
+
+        # Semaphore for parallel downloads
+        self.download_semaphore = asyncio.Semaphore(2)
+
+        logger.info(f"MikoSC initialized. Movies: {self.movies_folder}, Series: {self.series_folder}")
+
+    def search(self, query: str, filter_type: str = None) -> list:
+        """
+        Search for content on StreamingCommunity.
+
+        Args:
+            query: Search query
+            filter_type: 'movie', 'tv', or None for all
+
+        Returns:
+            List of MediaItem objects
+        """
+        logger.info(f"Searching StreamingCommunity for: {query}")
+        results = self.sc.search(query)
+
+        if filter_type == "movie":
+            results = [r for r in results if r.type == "movie"]
+        elif filter_type == "tv":
+            results = [r for r in results if r.type == "tv"]
+
+        self.search_results = results
+        logger.info(f"Found {len(results)} results")
+        return results
+
+    def search_series(self, query: str) -> list:
+        """Search for TV series only."""
+        return self.search(query, filter_type="tv")
+
+    def search_films(self, query: str) -> list:
+        """Search for films only."""
+        return self.search(query, filter_type="movie")
+
+    def select_from_results(self, index: int) -> MediaItem:
+        """Select an item from last search results by index."""
+        if 0 <= index < len(self.search_results):
+            self.current_item = self.search_results[index]
+            logger.info(f"Selected: {self.current_item.name}")
+            return self.current_item
+        logger.warning(f"Invalid index: {index}")
+        return None
+
+    def get_series_info(self, item: MediaItem = None) -> SeriesInfo:
+        """
+        Get full series information.
+
+        Args:
+            item: MediaItem to get info for (uses current_item if None)
+
+        Returns:
+            SeriesInfo object
+        """
+        item = item or self.current_item
+        if not item:
+            logger.warning("No item selected")
+            return None
+
+        if item.type != "tv":
+            logger.warning(f"{item.name} is not a TV series")
+            return None
+
+        info = self.sc.get_series_info(item)
+        if info:
+            self.current_series = info
+            logger.info(f"Loaded series: {info.name} ({len(info.seasons)} seasons)")
+        return info
+
+    def get_season_episodes(self, season_number: int) -> list:
+        """Get episodes for a specific season."""
+        if not self.current_series:
+            logger.warning("No series loaded")
+            return []
+
+        return self.sc.get_season_episodes(self.current_series, season_number)
+
+    # ==================== DATABASE OPERATIONS ====================
+
+    def add_series_to_library(self, item: MediaItem = None) -> bool:
+        """
+        Add a TV series to the library for tracking.
+
+        Args:
+            item: MediaItem to add (uses current_item if None)
+
+        Returns:
+            True if added successfully
+        """
+        item = item or self.current_item
+        if not item or item.type != "tv":
+            logger.warning("No TV series selected")
+            return False
+
+        # Get series info
+        info = self.get_series_info(item)
+        if not info:
+            return False
+
+        # Calculate total episodes across all seasons
+        total_episodes = 0
+        for season in info.seasons:
+            if not season.episodes:
+                self.get_season_episodes(season.number)
+            total_episodes += len(season.episodes)
+
+        # Build link for database
+        link = f"{self.sc.base_url}/{item.provider_language}/titles/{item.id}-{item.slug}"
+
+        success = self.db.add_tv(
+            name=item.name,
+            link=link,
+            last_update=datetime.now(),
+            numero_episodi=total_episodes,
+            slug=item.slug,
+            media_id=item.id,
+            provider_language=item.provider_language,
+            year=item.year,
+            provider="streamingcommunity"
+        )
+
+        if success:
+            logger.info(f"Added series '{item.name}' to library")
+            # Create series folder
+            series_folder = os.path.join(self.series_folder, item.name)
+            os.makedirs(series_folder, exist_ok=True)
+
+        return success
+
+    def add_film_to_library(self, item: MediaItem = None) -> bool:
+        """
+        Add a film to the library.
+
+        Args:
+            item: MediaItem to add (uses current_item if None)
+
+        Returns:
+            True if added successfully
+        """
+        item = item or self.current_item
+        if not item or item.type != "movie":
+            logger.warning("No movie selected")
+            return False
+
+        link = f"{self.sc.base_url}/{item.provider_language}/titles/{item.id}-{item.slug}"
+
+        success = self.db.add_movie(
+            name=item.name,
+            link=link,
+            last_update=datetime.now(),
+            slug=item.slug,
+            media_id=item.id,
+            provider_language=item.provider_language,
+            year=item.year,
+            provider="streamingcommunity"
+        )
+
+        if success:
+            logger.info(f"Added movie '{item.name}' to library")
+
+        return success
+
+    def get_library_series(self) -> list:
+        """Get all TV series from library."""
+        return self.db.get_all_tv()
+
+    def get_library_films(self) -> list:
+        """Get all films from library."""
+        return self.db.get_all_movies()
+
+    def remove_series(self, name: str) -> bool:
+        """Remove a series from the library."""
+        return self.db.remove_tv(name)
+
+    def remove_film(self, name: str) -> bool:
+        """Remove a film from the library."""
+        return self.db.remove_movie(name)
+
+    # ==================== DOWNLOAD OPERATIONS ====================
+
+    async def download_film(self, item: MediaItem = None,
+                            progress_callback=None) -> tuple:
+        """
+        Download a film.
+
+        Args:
+            item: MediaItem to download (uses current_item if None)
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Tuple of (success, path or error)
+        """
+        item = item or self.current_item
+        if not item or item.type != "movie":
+            return (False, "No movie selected")
+
+        logger.info(f"Downloading film: {item.name}")
+
+        async with self.download_semaphore:
+            success, result = await self.sc.download_film(item, progress_callback)
+
+        if success:
+            # Mark as downloaded in database
+            self.db.update_movie_downloaded(item.name, 1)
+            logger.info(f"Film downloaded: {result}")
+        else:
+            logger.error(f"Download failed: {result}")
+
+        return (success, result)
+
+    async def download_episode(self, series_name: str, season_number: int,
+                               episode_number: int, progress_callback=None) -> tuple:
+        """
+        Download a single episode.
+
+        Args:
+            series_name: Name of the series
+            season_number: Season number
+            episode_number: Episode number
+            progress_callback: Optional callback
+
+        Returns:
+            Tuple of (success, path or error)
+        """
+        # Get series from database
+        series_data = self.db.get_tv_by_name(series_name)
+        if not series_data:
+            return (False, f"Series '{series_name}' not found in library")
+
+        # Load series info
+        item = MediaItem(
+            id=series_data["media_id"],
+            name=series_data["name"],
+            slug=series_data["slug"],
+            type="tv",
+            year=series_data.get("year", ""),
+            provider_language=series_data.get("provider_language", "it")
+        )
+
+        info = self.sc.get_series_info(item)
+        if not info:
+            return (False, "Could not load series info")
+
+        # Get episodes for season
+        episodes = self.sc.get_season_episodes(info, season_number)
+        if not episodes:
+            return (False, f"Season {season_number} not found")
+
+        # Find episode
+        episode = next((e for e in episodes if e.number == episode_number), None)
+        if not episode:
+            return (False, f"Episode {episode_number} not found")
+
+        logger.info(f"Downloading: {series_name} S{season_number:02d}E{episode_number:02d}")
+
+        async with self.download_semaphore:
+            success, result = await self.sc.download_episode(
+                info, season_number, episode,
+                lang=series_data.get("provider_language", "it"),
+                progress_callback=progress_callback
+            )
+
+        if success:
+            # Update seasons data in database
+            self._update_downloaded_episode(series_name, season_number, episode_number)
+            logger.info(f"Episode downloaded: {result}")
+        else:
+            logger.error(f"Download failed: {result}")
+
+        return (success, result)
+
+    async def download_season(self, series_name: str, season_number: int,
+                              progress_callback=None) -> dict:
+        """
+        Download all episodes of a season.
+
+        Args:
+            series_name: Name of the series
+            season_number: Season number
+            progress_callback: Optional callback
+
+        Returns:
+            Dict mapping episode numbers to (success, path or error)
+        """
+        series_data = self.db.get_tv_by_name(series_name)
+        if not series_data:
+            return {}
+
+        item = MediaItem(
+            id=series_data["media_id"],
+            name=series_data["name"],
+            slug=series_data["slug"],
+            type="tv",
+            year=series_data.get("year", ""),
+            provider_language=series_data.get("provider_language", "it")
+        )
+
+        info = self.sc.get_series_info(item)
+        if not info:
+            return {}
+
+        logger.info(f"Downloading season {season_number} of {series_name}")
+
+        results = await self.sc.download_season(
+            info, season_number,
+            lang=series_data.get("provider_language", "it"),
+            progress_callback=progress_callback
+        )
+
+        # Update database
+        for ep_num, (success, _) in results.items():
+            if success:
+                self._update_downloaded_episode(series_name, season_number, ep_num)
+
+        return results
+
+    def _update_downloaded_episode(self, series_name: str, season: int, episode: int):
+        """Update the seasons_data JSON in database."""
+        series_data = self.db.get_tv_by_name(series_name)
+        if not series_data:
+            return
+
+        # Parse existing seasons_data or create new
+        seasons_data = {}
+        if series_data.get("seasons_data"):
+            try:
+                seasons_data = json.loads(series_data["seasons_data"])
+            except json.JSONDecodeError:
+                pass
+
+        # Initialize season if needed
+        season_key = str(season)
+        if season_key not in seasons_data:
+            seasons_data[season_key] = {"total": 0, "downloaded": []}
+
+        # Add episode to downloaded list
+        if episode not in seasons_data[season_key]["downloaded"]:
+            seasons_data[season_key]["downloaded"].append(episode)
+            seasons_data[season_key]["downloaded"].sort()
+
+        # Update database
+        self.db.update_tv_seasons_data(series_name, json.dumps(seasons_data))
+
+        # Update total downloaded count
+        total_downloaded = sum(
+            len(s.get("downloaded", [])) for s in seasons_data.values()
+        )
+        self.db.update_tv_episodes(series_name, total_downloaded)
+
+    def get_missing_episodes(self, series_name: str) -> dict:
+        """
+        Get missing episodes for a series.
+
+        Returns:
+            Dict mapping season numbers to lists of missing episode numbers
+        """
+        series_data = self.db.get_tv_by_name(series_name)
+        if not series_data:
+            return {}
+
+        # Load series info
+        item = MediaItem(
+            id=series_data["media_id"],
+            name=series_data["name"],
+            slug=series_data["slug"],
+            type="tv",
+            provider_language=series_data.get("provider_language", "it")
+        )
+
+        info = self.sc.get_series_info(item)
+        if not info:
+            return {}
+
+        # Parse downloaded episodes
+        downloaded = {}
+        if series_data.get("seasons_data"):
+            try:
+                seasons_json = json.loads(series_data["seasons_data"])
+                for s_key, s_data in seasons_json.items():
+                    downloaded[int(s_key)] = set(s_data.get("downloaded", []))
+            except json.JSONDecodeError:
+                pass
+
+        # Find missing episodes per season
+        missing = {}
+        for season in info.seasons:
+            if not season.episodes:
+                self.sc.get_season_episodes(info, season.number)
+
+            all_eps = {ep.number for ep in season.episodes}
+            downloaded_eps = downloaded.get(season.number, set())
+            missing_eps = all_eps - downloaded_eps
+
+            if missing_eps:
+                missing[season.number] = sorted(missing_eps)
+
+        return missing
+
+    async def download_missing_episodes(self, series_name: str,
+                                        progress_callback=None) -> dict:
+        """
+        Download all missing episodes for a series.
+
+        Returns:
+            Dict with results per season
+        """
+        missing = self.get_missing_episodes(series_name)
+        if not missing:
+            logger.info(f"No missing episodes for {series_name}")
+            return {}
+
+        results = {}
+        for season, episodes in missing.items():
+            logger.info(f"Downloading {len(episodes)} missing episodes from S{season:02d}")
+            season_results = {}
+
+            for ep_num in episodes:
+                success, result = await self.download_episode(
+                    series_name, season, ep_num, progress_callback
+                )
+                season_results[ep_num] = (success, result)
+
+            results[season] = season_results
+
+        return results
+
+    async def check_and_download_new_episodes(self, progress_callback=None) -> dict:
+        """
+        Check all series for new episodes and download them.
+
+        Returns:
+            Dict with download results per series
+        """
+        all_results = {}
+        series_list = self.get_library_series()
+
+        for series in series_list:
+            name = series.get("name")
+            if not name:
+                continue
+
+            logger.info(f"Checking for new episodes: {name}")
+            missing = self.get_missing_episodes(name)
+
+            if missing:
+                total_missing = sum(len(eps) for eps in missing.values())
+                logger.info(f"Found {total_missing} missing episodes for {name}")
+
+                results = await self.download_missing_episodes(name, progress_callback)
+                all_results[name] = results
+            else:
+                logger.info(f"No new episodes for {name}")
+
+        return all_results

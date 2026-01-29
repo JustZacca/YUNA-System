@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackQueryHandler
 import miko
+from miko import MikoSC
 from airi import Airi
 import os
 import logging
@@ -43,6 +44,16 @@ class Kan:
 
         # Stato per menu rimozione anime
         self.selected_anime_for_removal = {}  # user_id -> set(anime_names)
+
+        # StreamingCommunity extension
+        self.miko_sc = MikoSC()
+        self.sc_search_results = {}  # user_id -> list of MediaItem
+        self.sc_current_series = {}  # user_id -> SeriesInfo
+        self.selected_series_for_removal = {}  # user_id -> set(series_names)
+
+        # Conversation states for SC
+        self.SC_SEARCH = 10
+        self.SC_SELECT_SEASON = 11
 
     # Function to start conversation with /aggiungi_anime
     async def aggiungi_anime(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -109,20 +120,31 @@ class Kan:
 
         self.logger.info("Authorized. Sending welcome message.")
         
-        commands = [
-            "/aggiungi_anime",
-            "/lista_anime",
-            "/trova_anime",
-            "/download_episodi",
-            "/rimuovi_anime",
-            "/aggiorna_libreria",
-            "/stop_bot"
+        anime_commands = [
+            "/aggiungi_anime - Aggiungi anime",
+            "/lista_anime - Lista anime",
+            "/trova_anime - Cerca anime",
+            "/download_episodi - Scarica episodi",
+            "/rimuovi_anime - Rimuovi anime",
+            "/aggiorna_libreria - Aggiorna anime",
         ]
-        command_list = "\n".join([f"• {command}" for command in commands])
+        sc_commands = [
+            "/cerca_sc - Cerca film/serie TV",
+            "/lista_serie - Lista serie TV",
+            "/lista_film - Lista film",
+            "/aggiorna_serie - Scarica nuovi episodi",
+            "/rimuovi_serie - Rimuovi serie",
+        ]
+        system_commands = [
+            "/stop_bot - Arresta il bot",
+        ]
 
         await update.message.reply_text(
-            f"Benvenuto in KAN, spero tu sia Nicholas o non sei il benvenuto. ⚡\n\n"
-            f"Ecco cosa puoi fare:\n{command_list}"
+            f"Benvenuto in KAN, spero tu sia Nicholas o non sei il benvenuto.\n\n"
+            f"*Anime (AnimeWorld):*\n" + "\n".join([f"  {c}" for c in anime_commands]) + "\n\n"
+            f"*Film/Serie (StreamingCommunity):*\n" + "\n".join([f"  {c}" for c in sc_commands]) + "\n\n"
+            f"*Sistema:*\n" + "\n".join([f"  {c}" for c in system_commands]),
+            parse_mode="Markdown"
         )
 
     # Function to cancel the conversation
@@ -610,6 +632,476 @@ class Kan:
         except Exception:
             pass  # Se anche la notifica fallisce, non crashare
 
+    # ==================== STREAMINGCOMMUNITY COMMANDS ====================
+
+    async def cerca_sc(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Command /cerca_sc - Search on StreamingCommunity."""
+        user_id = update.effective_user.id
+
+        if user_id != self.AUTHORIZED_USER_ID:
+            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            return
+
+        await update.message.reply_text(
+            "Scrivi il nome del film o serie TV da cercare su StreamingCommunity:"
+        )
+        return self.SC_SEARCH
+
+    async def receive_sc_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Handle search query for StreamingCommunity."""
+        query = update.message.text.strip()
+        user_id = update.effective_user.id
+
+        self.logger.info(f"SC search: {query}")
+
+        # Perform search
+        results = self.miko_sc.search(query)
+
+        if not results:
+            await update.message.reply_text(
+                f"Nessun risultato trovato per '{query}'."
+            )
+            return self.SC_SEARCH
+
+        # Store results for user
+        self.sc_search_results[user_id] = results[:6]  # Max 6 results
+
+        # Build keyboard
+        keyboard = []
+        for idx, item in enumerate(self.sc_search_results[user_id]):
+            type_emoji = "📺" if item.type == "tv" else "🎬"
+            label = f"{type_emoji} {item.name}"
+            if item.year:
+                label += f" ({item.year})"
+            keyboard.append([InlineKeyboardButton(
+                label, callback_data=f"sc_select|{idx}"
+            )])
+
+        keyboard.append([InlineKeyboardButton("❌ Annulla", callback_data="sc_cancel")])
+
+        await update.message.reply_text(
+            f"Trovati {len(results)} risultati. Seleziona:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return ConversationHandler.END
+
+    async def handle_sc_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle selection from SC search results."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        data = query.data
+
+        if data == "sc_cancel":
+            await query.edit_message_text("Ricerca annullata.")
+            return
+
+        if data.startswith("sc_select|"):
+            idx = int(data.split("|")[1])
+            results = self.sc_search_results.get(user_id, [])
+
+            if 0 <= idx < len(results):
+                item = results[idx]
+                self.miko_sc.current_item = item
+
+                if item.type == "tv":
+                    # Show series options
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("➕ Aggiungi alla libreria", callback_data=f"sc_add_series|{idx}")],
+                        [InlineKeyboardButton("📥 Scarica episodi", callback_data=f"sc_download_series|{idx}")],
+                        [InlineKeyboardButton("❌ Annulla", callback_data="sc_cancel")]
+                    ])
+                    await query.edit_message_text(
+                        f"📺 *{item.name}* ({item.year})\n\nCosa vuoi fare?",
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                else:
+                    # Show movie options
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("➕ Aggiungi e Scarica", callback_data=f"sc_download_film|{idx}")],
+                        [InlineKeyboardButton("❌ Annulla", callback_data="sc_cancel")]
+                    ])
+                    await query.edit_message_text(
+                        f"🎬 *{item.name}* ({item.year})\n\nCosa vuoi fare?",
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+
+    async def handle_sc_add_series(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle adding a series to library."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        data = query.data
+
+        if data.startswith("sc_add_series|"):
+            idx = int(data.split("|")[1])
+            results = self.sc_search_results.get(user_id, [])
+
+            if 0 <= idx < len(results):
+                item = results[idx]
+                self.miko_sc.current_item = item
+
+                await query.edit_message_text(f"Aggiungo '{item.name}' alla libreria...")
+
+                success = self.miko_sc.add_series_to_library(item)
+
+                if success:
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"✅ Serie '{item.name}' aggiunta alla libreria!"
+                    )
+                else:
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"❌ Errore nell'aggiunta di '{item.name}'. Potrebbe essere già presente."
+                    )
+
+    async def handle_sc_download_series(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle downloading series episodes."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        data = query.data
+
+        if data.startswith("sc_download_series|"):
+            idx = int(data.split("|")[1])
+            results = self.sc_search_results.get(user_id, [])
+
+            if 0 <= idx < len(results):
+                item = results[idx]
+                self.miko_sc.current_item = item
+
+                # Get series info
+                info = self.miko_sc.get_series_info(item)
+                if not info:
+                    await query.edit_message_text("Errore nel recupero delle informazioni della serie.")
+                    return
+
+                self.sc_current_series[user_id] = info
+
+                # Build season selection keyboard
+                keyboard = []
+                for season in info.seasons:
+                    keyboard.append([InlineKeyboardButton(
+                        f"Stagione {season.number}",
+                        callback_data=f"sc_season|{season.number}"
+                    )])
+
+                keyboard.append([InlineKeyboardButton(
+                    "📥 Scarica TUTTE le stagioni",
+                    callback_data="sc_season|all"
+                )])
+                keyboard.append([InlineKeyboardButton("❌ Annulla", callback_data="sc_cancel")])
+
+                await query.edit_message_text(
+                    f"📺 *{info.name}*\n\n"
+                    f"Seleziona la stagione da scaricare:",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="Markdown"
+                )
+
+    async def handle_sc_season_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle season selection for download."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        data = query.data
+
+        if data.startswith("sc_season|"):
+            season_str = data.split("|")[1]
+            series_info = self.sc_current_series.get(user_id)
+
+            if not series_info:
+                await query.edit_message_text("Errore: nessuna serie selezionata.")
+                return
+
+            # Add to library first if not present
+            if not self.miko_sc.db.get_tv_by_name(series_info.name):
+                self.miko_sc.add_series_to_library()
+
+            if season_str == "all":
+                # Download all seasons
+                await query.edit_message_text(
+                    f"📥 Inizio download di tutte le stagioni di *{series_info.name}*...\n"
+                    f"Questo potrebbe richiedere tempo.",
+                    parse_mode="Markdown"
+                )
+
+                for season in series_info.seasons:
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"⏳ Scaricando Stagione {season.number}..."
+                    )
+                    results = await self.miko_sc.download_season(series_info.name, season.number)
+                    successes = sum(1 for s, _ in results.values() if s)
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"✅ Stagione {season.number}: {successes}/{len(results)} episodi scaricati"
+                    )
+
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"🎉 Download di *{series_info.name}* completato!",
+                    parse_mode="Markdown"
+                )
+            else:
+                # Download single season
+                season_num = int(season_str)
+                await query.edit_message_text(
+                    f"📥 Scaricando Stagione {season_num} di *{series_info.name}*...",
+                    parse_mode="Markdown"
+                )
+
+                results = await self.miko_sc.download_season(series_info.name, season_num)
+                successes = sum(1 for s, _ in results.values() if s)
+
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"✅ Stagione {season_num}: {successes}/{len(results)} episodi scaricati"
+                )
+
+    async def handle_sc_download_film(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle film download."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        data = query.data
+
+        if data.startswith("sc_download_film|"):
+            idx = int(data.split("|")[1])
+            results = self.sc_search_results.get(user_id, [])
+
+            if 0 <= idx < len(results):
+                item = results[idx]
+                self.miko_sc.current_item = item
+
+                await query.edit_message_text(
+                    f"📥 Scaricando *{item.name}*...\n"
+                    f"Questo potrebbe richiedere tempo.",
+                    parse_mode="Markdown"
+                )
+
+                # Add to library
+                self.miko_sc.add_film_to_library(item)
+
+                # Download
+                success, result = await self.miko_sc.download_film(item)
+
+                if success:
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"✅ Film *{item.name}* scaricato con successo!",
+                        parse_mode="Markdown"
+                    )
+                else:
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"❌ Errore nel download: {result}"
+                    )
+
+    async def lista_serie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Command /lista_serie - List all tracked TV series."""
+        user_id = update.effective_user.id
+
+        if user_id != self.AUTHORIZED_USER_ID:
+            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            return
+
+        series_list = self.miko_sc.get_library_series()
+
+        if not series_list:
+            await update.message.reply_text("📭 Nessuna serie TV nella libreria.")
+            return
+
+        text = "📺 *Serie TV nella libreria:*\n\n"
+        for series in series_list:
+            name = series.get("name", "Sconosciuto")
+            year = series.get("year", "")
+            downloaded = series.get("episodi_scaricati", 0)
+            total = series.get("numero_episodi", 0)
+            text += f"• *{name}* ({year}) - {downloaded}/{total} episodi\n"
+
+        await update.message.reply_text(text, parse_mode="Markdown")
+
+    async def lista_film(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Command /lista_film - List all films."""
+        user_id = update.effective_user.id
+
+        if user_id != self.AUTHORIZED_USER_ID:
+            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            return
+
+        films_list = self.miko_sc.get_library_films()
+
+        if not films_list:
+            await update.message.reply_text("📭 Nessun film nella libreria.")
+            return
+
+        text = "🎬 *Film nella libreria:*\n\n"
+        for film in films_list:
+            name = film.get("name", "Sconosciuto")
+            year = film.get("year", "")
+            downloaded = "✅" if film.get("scaricato") else "⏳"
+            text += f"• {downloaded} *{name}* ({year})\n"
+
+        await update.message.reply_text(text, parse_mode="Markdown")
+
+    async def aggiorna_serie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Command /aggiorna_serie - Check and download new episodes for all series."""
+        user_id = update.effective_user.id
+
+        if user_id != self.AUTHORIZED_USER_ID:
+            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            return
+
+        await update.message.reply_text("🔍 Controllo nuovi episodi per tutte le serie...")
+
+        results = await self.miko_sc.check_and_download_new_episodes()
+
+        if not results:
+            await update.message.reply_text("✅ Tutte le serie sono aggiornate!")
+            return
+
+        # Build report
+        text = "📥 *Download completato:*\n\n"
+        for series_name, seasons in results.items():
+            total = sum(len(eps) for eps in seasons.values())
+            text += f"• *{series_name}*: {total} episodi scaricati\n"
+
+        await update.message.reply_text(text, parse_mode="Markdown")
+
+    # ==================== REMOVAL MENU FOR SERIES ====================
+
+    def _build_series_removal_keyboard(self, user_id: int) -> InlineKeyboardMarkup:
+        """Build keyboard for series removal menu."""
+        series_list = self.miko_sc.get_library_series()
+        selected = self.selected_series_for_removal.get(user_id, set())
+
+        keyboard = []
+        for series in series_list:
+            name = series.get("name", "Sconosciuto")
+            is_selected = name in selected
+            checkbox = "✅" if is_selected else "⬜"
+            keyboard.append([InlineKeyboardButton(
+                f"{checkbox} {name}",
+                callback_data=f"sc_removal_toggle|{name}"
+            )])
+
+        keyboard.append([
+            InlineKeyboardButton("✅ Seleziona Tutti", callback_data="sc_removal_select_all"),
+            InlineKeyboardButton("⬜ Deseleziona", callback_data="sc_removal_deselect_all")
+        ])
+        keyboard.append([
+            InlineKeyboardButton("🗑️ Conferma Rimozione", callback_data="sc_removal_confirm"),
+            InlineKeyboardButton("❌ Annulla", callback_data="sc_removal_cancel")
+        ])
+
+        return InlineKeyboardMarkup(keyboard)
+
+    async def rimuovi_serie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Command /rimuovi_serie - Remove series from library."""
+        user_id = update.effective_user.id
+
+        if user_id != self.AUTHORIZED_USER_ID:
+            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            return
+
+        series_list = self.miko_sc.get_library_series()
+        if not series_list:
+            await update.message.reply_text("📭 Nessuna serie nella libreria.")
+            return
+
+        self.selected_series_for_removal[user_id] = set()
+
+        reply_markup = self._build_series_removal_keyboard(user_id)
+        await update.message.reply_text(
+            "🗑️ *Seleziona le serie da rimuovere:*",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+    async def handle_sc_removal_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle series removal toggle."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        data = query.data
+
+        if data.startswith("sc_removal_toggle|"):
+            name = data.split("|", 1)[1]
+            selected = self.selected_series_for_removal.get(user_id, set())
+
+            if name in selected:
+                selected.discard(name)
+            else:
+                selected.add(name)
+
+            self.selected_series_for_removal[user_id] = selected
+
+        elif data == "sc_removal_select_all":
+            series_list = self.miko_sc.get_library_series()
+            self.selected_series_for_removal[user_id] = {
+                s.get("name") for s in series_list
+            }
+
+        elif data == "sc_removal_deselect_all":
+            self.selected_series_for_removal[user_id] = set()
+
+        elif data == "sc_removal_cancel":
+            self.selected_series_for_removal.pop(user_id, None)
+            await query.edit_message_text("👋 Operazione annullata.")
+            return
+
+        elif data == "sc_removal_confirm":
+            selected = self.selected_series_for_removal.get(user_id, set())
+            if not selected:
+                await query.answer("Nessuna serie selezionata!", show_alert=True)
+                return
+
+            # Execute removal
+            results = []
+            for name in selected:
+                success = self.miko_sc.remove_series(name)
+                results.append(f"{'✅' if success else '❌'} {name}")
+
+            self.selected_series_for_removal.pop(user_id, None)
+
+            await query.edit_message_text(
+                f"🗑️ *Rimozione completata:*\n\n" + "\n".join(results),
+                parse_mode="Markdown"
+            )
+            return
+
+        # Update keyboard
+        reply_markup = self._build_series_removal_keyboard(user_id)
+        await query.edit_message_reply_markup(reply_markup=reply_markup)
+
     async def aggiorna_libreria(self,update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.message.from_user.id
         self.logger.info(f"/aggiorna_libreria from {user_id}")
@@ -640,12 +1132,20 @@ class Kan:
         async def post_init(application):
             commands = [
                 ('start', 'Avvia il bot'),
+                # Anime commands
                 ('aggiungi_anime', 'Aggiungi un anime'),
                 ('lista_anime', 'Visualizza la lista degli anime'),
                 ('trova_anime', 'Trova un anime'),
-                ('download_episodi', 'Scarica gli episodi'),
+                ('download_episodi', 'Scarica gli episodi anime'),
                 ('rimuovi_anime', 'Rimuovi anime dalla libreria'),
-                ('aggiorna_libreria', 'Aggiorna la libreria'),
+                ('aggiorna_libreria', 'Aggiorna la libreria anime'),
+                # StreamingCommunity commands
+                ('cerca_sc', 'Cerca film/serie su SC'),
+                ('lista_serie', 'Lista serie TV'),
+                ('lista_film', 'Lista film'),
+                ('aggiorna_serie', 'Scarica nuovi episodi serie'),
+                ('rimuovi_serie', 'Rimuovi serie dalla libreria'),
+                # System
                 ('stop_bot', 'Arresta il bot'),
             ]
             await application.bot.set_my_commands(commands)
@@ -679,9 +1179,25 @@ class Kan:
         app.add_handler(CommandHandler("download_episodi", self.download_episodi))
         app.add_handler(CommandHandler("rimuovi_anime", self.rimuovi_anime))
 
+        # StreamingCommunity command handlers
+        app.add_handler(CommandHandler("lista_serie", self.lista_serie))
+        app.add_handler(CommandHandler("lista_film", self.lista_film))
+        app.add_handler(CommandHandler("aggiorna_serie", self.aggiorna_serie))
+        app.add_handler(CommandHandler("rimuovi_serie", self.rimuovi_serie))
+
         # Conversation handlers
         app.add_handler(conversation_handler)
         app.add_handler(trova_anime_conversation)
+
+        # StreamingCommunity search conversation
+        cerca_sc_conversation = ConversationHandler(
+            entry_points=[CommandHandler("cerca_sc", self.cerca_sc)],
+            states={
+                self.SC_SEARCH: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.receive_sc_search)]
+            },
+            fallbacks=[CommandHandler("cancel", self.cancel)],
+        )
+        app.add_handler(cerca_sc_conversation)
 
         # Callback query handlers con pattern specifici (ordine importante: pattern specifici prima)
         app.add_handler(CallbackQueryHandler(self.handle_anime_selection, pattern=r"^download_anime\|"))
@@ -690,6 +1206,15 @@ class Kan:
         # Handler per menu rimozione anime
         app.add_handler(CallbackQueryHandler(self.handle_removal_toggle, pattern=r"^removal_(toggle\||select_all|deselect_all|cancel|confirm)"))
         app.add_handler(CallbackQueryHandler(self.handle_removal_execute, pattern=r"^removal_(execute|back)$"))
+
+        # StreamingCommunity callback handlers
+        app.add_handler(CallbackQueryHandler(self.handle_sc_selection, pattern=r"^sc_select\|"))
+        app.add_handler(CallbackQueryHandler(self.handle_sc_selection, pattern=r"^sc_cancel$"))
+        app.add_handler(CallbackQueryHandler(self.handle_sc_add_series, pattern=r"^sc_add_series\|"))
+        app.add_handler(CallbackQueryHandler(self.handle_sc_download_series, pattern=r"^sc_download_series\|"))
+        app.add_handler(CallbackQueryHandler(self.handle_sc_season_selection, pattern=r"^sc_season\|"))
+        app.add_handler(CallbackQueryHandler(self.handle_sc_download_film, pattern=r"^sc_download_film\|"))
+        app.add_handler(CallbackQueryHandler(self.handle_sc_removal_toggle, pattern=r"^sc_removal_"))
         # RIMOSSO: handler duplicati senza pattern che catturavano tutto
         aggiorna_libreria_handler = CommandHandler("aggiorna_libreria", self.aggiorna_libreria)
         app.add_handler(aggiorna_libreria_handler)

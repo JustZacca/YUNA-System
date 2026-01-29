@@ -70,11 +70,16 @@ def get_animeworld_url():
 
 
 class Airi:
-    def __init__(self, db_path: str = "yuna.db"):
+    def __init__(self, db_path: str = None):
         load_dotenv()  # Carica il file .env nella environment
 
-        # Default a /downloads per compatibilità con Docker
-        self.destination_folder = os.getenv("DESTINATION_FOLDER", "/downloads")
+        # Download folders - supporta cartelle separate per tipo di media
+        self.anime_folder = os.getenv("ANIME_FOLDER", "/downloads/anime")
+        self.series_folder = os.getenv("SERIES_FOLDER", "/downloads/series")
+        self.movies_folder = os.getenv("MOVIES_FOLDER", "/downloads/movies")
+
+        # Legacy: DESTINATION_FOLDER per retrocompatibilità (usa anime_folder come default)
+        self.destination_folder = os.getenv("DESTINATION_FOLDER", self.anime_folder)
         self.telegram_token = os.getenv("TELEGRAM_TOKEN")
         # Gestione errore per TELEGRAM_CHAT_ID non valido
         telegram_chat_id_str = os.getenv("TELEGRAM_CHAT_ID")
@@ -94,8 +99,12 @@ class Airi:
         self.tv_config_path = "tv_config.json"
 
         # Initialize database and auto-migrate from JSON if exists
+        # db_path=None means use DATABASE_PATH env var or default /data/yuna.db
         self.db = Database(db_path)
         self._auto_migrate_from_json()
+
+        # Log database location for debugging
+        logger.info(f"Database path: {self.db.db_path}")
 
     def _auto_migrate_from_json(self):
         """
@@ -138,12 +147,30 @@ class Airi:
 
     def get_destination_folder(self):
         """
-        Restituisce la cartella di destinazione per il download.
+        Restituisce la cartella di destinazione per il download (legacy/anime).
         """
         if not self.destination_folder:
             raise ValueError(
                 "La cartella di destinazione non è impostata nell'ambiente.")
         return self.destination_folder
+
+    def get_anime_folder(self):
+        """
+        Restituisce la cartella di destinazione per gli anime.
+        """
+        return self.anime_folder
+
+    def get_series_folder(self):
+        """
+        Restituisce la cartella di destinazione per le serie TV.
+        """
+        return self.series_folder
+
+    def get_movies_folder(self):
+        """
+        Restituisce la cartella di destinazione per i film.
+        """
+        return self.movies_folder
 
     def load_or_create_config(self):
         """
@@ -258,26 +285,111 @@ class Airi:
         """
         return self.db.get_all_tv()
 
-    def add_tv(self, name, link, last_update, numero_episodi):
+    def add_tv(self, name, link, last_update, numero_episodi,
+               slug=None, media_id=None, provider_language="it",
+               year=None, provider="streamingcommunity"):
         """
         Aggiunge una nuova serie TV al database.
+        Supporta sia link completi che path relativi.
         """
-        parsed_link = urlparse(link).path
+        # Se il link è un URL completo, estrai solo il path
+        if link.startswith("http"):
+            parsed_link = urlparse(link).path
+        else:
+            parsed_link = link
 
         # Convert last_update to datetime if it's a string
         last_update_dt = self._parse_last_update(last_update)
 
-        # Check if TV show with same link already exists
-        existing_tv = self.db.get_all_tv()
-        for show in existing_tv:
-            if show.get("link") == parsed_link:
-                logger.warning(
-                    f"La serie TV con il link '{parsed_link}' esiste già. Aggiunta saltata.")
-                return
+        # Check if TV show with same name already exists
+        existing_tv = self.db.get_tv_by_name(name)
+        if existing_tv:
+            logger.warning(f"La serie TV '{name}' esiste già. Aggiunta saltata.")
+            return False
 
-        success = self.db.add_tv(name, parsed_link, last_update_dt, numero_episodi)
+        success = self.db.add_tv(
+            name, parsed_link, last_update_dt, numero_episodi,
+            slug=slug, media_id=media_id, provider_language=provider_language,
+            year=year, provider=provider
+        )
         if success:
             logger.info(f"Serie TV '{name}' aggiunta alla configurazione.")
+        return success
+
+    def update_tv_episodes(self, name, episodi_scaricati: int):
+        """
+        Aggiorna il numero di episodi scaricati della serie TV nel database.
+        """
+        success = self.db.update_tv_episodes(name, episodi_scaricati)
+        if success:
+            logger.info(f"Episodi scaricati aggiornati per la serie TV '{name}'.")
+        return success
+
+    def update_tv_total_episodes(self, name, numero_episodi: int):
+        """
+        Aggiorna il numero totale di episodi della serie TV nel database.
+        """
+        return self.db.update_tv_total_episodes(name, numero_episodi)
+
+    def update_tv_last_update(self, name, last_update):
+        """
+        Aggiorna la data di last_update della serie TV nel database.
+        """
+        last_update_dt = self._parse_last_update(last_update)
+        return self.db.update_tv_last_update(name, last_update_dt)
+
+    def update_tv_seasons_data(self, name, seasons_data: dict):
+        """
+        Aggiorna i dati delle stagioni della serie TV (JSON).
+        """
+        import json
+        return self.db.update_tv_seasons_data(name, json.dumps(seasons_data))
+
+    def get_tv_link(self, tv_name):
+        """
+        Restituisce il link della serie TV in base al nome.
+        """
+        tv_name = tv_name.strip().lower()
+        tv = self.db.search_tv_by_name(tv_name)
+        if tv:
+            return tv.get("link", "Link non disponibile.")
+        return "Serie TV non trovata."
+
+    def remove_tv(self, tv_name: str) -> tuple:
+        """
+        Rimuove una serie TV dal database e cancella la sua cartella dal disco.
+        """
+        tv = self.db.get_tv_by_name(tv_name)
+        if tv is None:
+            logger.warning(f"Serie TV '{tv_name}' non trovata nella configurazione.")
+            return (False, f"Serie TV '{tv_name}' non trovata.")
+
+        success = self.db.remove_tv(tv_name)
+        if not success:
+            logger.error(f"Errore nella rimozione della serie TV '{tv_name}' dal database.")
+            return (False, "Errore nella rimozione dal database.")
+
+        logger.info(f"Serie TV '{tv_name}' rimossa dalla configurazione.")
+
+        # Cancella la cartella dal disco
+        tv_folder = os.path.join(self.series_folder, tv_name)
+        folder_deleted = False
+
+        if os.path.exists(tv_folder):
+            try:
+                shutil.rmtree(tv_folder)
+                logger.info(f"Cartella '{tv_folder}' eliminata con successo.")
+                folder_deleted = True
+            except Exception as e:
+                logger.error(f"Errore nell'eliminazione della cartella '{tv_folder}': {e}")
+                return (True, f"Serie TV rimossa dal config, ma errore nell'eliminazione cartella: {e}")
+        else:
+            logger.warning(f"Cartella '{tv_folder}' non esistente.")
+
+        if folder_deleted:
+            return (True, f"Serie TV '{tv_name}' rimossa completamente (config + cartella).")
+        else:
+            return (True, f"Serie TV '{tv_name}' rimossa dal config. Cartella non esisteva.")
 
     def get_movies(self):
         """
@@ -285,26 +397,99 @@ class Airi:
         """
         return self.db.get_all_movies()
 
-    def add_movie(self, name, link, last_update):
+    def get_pending_movies(self):
+        """
+        Ritorna la lista dei film non ancora scaricati.
+        """
+        return self.db.get_pending_movies()
+
+    def add_movie(self, name, link, last_update, slug=None, media_id=None,
+                  provider_language="it", year=None, provider="streamingcommunity"):
         """
         Aggiunge un nuovo film al database.
         """
-        parsed_link = urlparse(link).path
+        # Se il link è un URL completo, estrai solo il path
+        if link.startswith("http"):
+            parsed_link = urlparse(link).path
+        else:
+            parsed_link = link
 
         # Convert last_update to datetime if it's a string
         last_update_dt = self._parse_last_update(last_update)
 
-        # Check if movie with same link already exists
-        existing_movies = self.db.get_all_movies()
-        for movie in existing_movies:
-            if movie.get("link") == parsed_link:
-                logger.warning(
-                    f"Il film con il link '{parsed_link}' esiste già. Aggiunta saltata.")
-                return
+        # Check if movie with same name already exists
+        existing_movie = self.db.get_movie_by_name(name)
+        if existing_movie:
+            logger.warning(f"Il film '{name}' esiste già. Aggiunta saltata.")
+            return False
 
-        success = self.db.add_movie(name, parsed_link, last_update_dt)
+        success = self.db.add_movie(
+            name, parsed_link, last_update_dt,
+            slug=slug, media_id=media_id, provider_language=provider_language,
+            year=year, provider=provider
+        )
         if success:
             logger.info(f"Film '{name}' aggiunto alla configurazione.")
+        return success
+
+    def update_movie_downloaded(self, name, scaricato: int = 1):
+        """
+        Segna un film come scaricato.
+        """
+        return self.db.update_movie_downloaded(name, scaricato)
+
+    def update_movie_last_update(self, name, last_update):
+        """
+        Aggiorna la data di last_update del film nel database.
+        """
+        last_update_dt = self._parse_last_update(last_update)
+        return self.db.update_movie_last_update(name, last_update_dt)
+
+    def get_movie_link(self, movie_name):
+        """
+        Restituisce il link del film in base al nome.
+        """
+        movie_name = movie_name.strip().lower()
+        movie = self.db.search_movie_by_name(movie_name)
+        if movie:
+            return movie.get("link", "Link non disponibile.")
+        return "Film non trovato."
+
+    def remove_movie(self, movie_name: str) -> tuple:
+        """
+        Rimuove un film dal database e cancella la sua cartella dal disco.
+        """
+        movie = self.db.get_movie_by_name(movie_name)
+        if movie is None:
+            logger.warning(f"Film '{movie_name}' non trovato nella configurazione.")
+            return (False, f"Film '{movie_name}' non trovato.")
+
+        success = self.db.remove_movie(movie_name)
+        if not success:
+            logger.error(f"Errore nella rimozione del film '{movie_name}' dal database.")
+            return (False, "Errore nella rimozione dal database.")
+
+        logger.info(f"Film '{movie_name}' rimosso dalla configurazione.")
+
+        # Cancella la cartella dal disco
+        movie_folder = os.path.join(self.movies_folder, movie_name)
+        folder_deleted = False
+
+        if os.path.exists(movie_folder):
+            try:
+                shutil.rmtree(movie_folder)
+                logger.info(f"Cartella '{movie_folder}' eliminata con successo.")
+                folder_deleted = True
+            except Exception as e:
+                logger.error(f"Errore nell'eliminazione della cartella '{movie_folder}': {e}")
+                return (True, f"Film rimosso dal config, ma errore nell'eliminazione cartella: {e}")
+        else:
+            logger.warning(f"Cartella '{movie_folder}' non esistente.")
+
+        if folder_deleted:
+            return (True, f"Film '{movie_name}' rimosso completamente (config + cartella).")
+        else:
+            return (True, f"Film '{movie_name}' rimosso dal config. Cartella non esisteva.")
 
     def remove_anime(self, anime_name: str) -> tuple:
         """

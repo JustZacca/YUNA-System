@@ -35,7 +35,7 @@ def temp_db(tmp_path) -> Generator[str, None, None]:
 
 
 @pytest.fixture
-def mock_env(monkeypatch) -> Dict[str, str]:
+def mock_env(monkeypatch, tmp_path) -> Dict[str, str]:
     """
     Mocks environment variables required by the YUNA-System.
 
@@ -45,18 +45,24 @@ def mock_env(monkeypatch) -> Dict[str, str]:
         - DESTINATION_FOLDER: Temporary folder for downloads
         - UPDATE_TIME: Update interval in seconds
         - BASE_URL_SC: Mock streaming URL
+        - DATABASE_PATH: Temporary database path
 
     Also patches load_dotenv to prevent loading from .env file.
 
     Returns:
         Dict[str, str]: Dictionary of mocked environment variables.
     """
+    db_path = str(tmp_path / "test_yuna.db")
+    download_folder = str(tmp_path / "downloads")
+    os.makedirs(download_folder, exist_ok=True)
+
     env_vars = {
         "TELEGRAM_TOKEN": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
         "TELEGRAM_CHAT_ID": "123456789",
-        "DESTINATION_FOLDER": "/tmp/yuna_test_downloads",
+        "DESTINATION_FOLDER": download_folder,
         "UPDATE_TIME": "60",
         "BASE_URL_SC": "https://test.streamingunity.shop",
+        "DATABASE_PATH": db_path,
     }
 
     for key, value in env_vars.items():
@@ -370,19 +376,31 @@ def reset_animeworld_cache():
 
 
 @pytest.fixture(autouse=True)
-def cleanup_default_db():
+def cleanup_default_db(tmp_path, monkeypatch):
     """
-    Removes the default yuna.db file before each test to ensure test isolation.
+    Sets DATABASE_PATH to a temporary location and cleans up after tests.
 
-    This prevents tests from interfering with each other through
-    the shared default database file.
+    This prevents tests from trying to create /data/yuna.db which requires
+    root permissions.
     """
     import os
-    db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "yuna.db")
-    if os.path.exists(db_path):
-        os.remove(db_path)
+
+    # Set DATABASE_PATH to temp location BEFORE any imports
+    db_path = str(tmp_path / "test_yuna.db")
+    monkeypatch.setenv("DATABASE_PATH", db_path)
+
+    # Also set DESTINATION_FOLDER to temp
+    download_folder = str(tmp_path / "downloads")
+    os.makedirs(download_folder, exist_ok=True)
+    monkeypatch.setenv("DESTINATION_FOLDER", download_folder)
+
+    # Reload database module to pick up new env var
+    import database
+    database.DEFAULT_DB_PATH = db_path
+
     yield
-    # Also cleanup after test
+
+    # Cleanup
     if os.path.exists(db_path):
         os.remove(db_path)
 
@@ -402,3 +420,184 @@ def mock_requests():
         mock_response.raise_for_status = MagicMock()
         mock.get.return_value = mock_response
         yield mock
+
+
+# ==================== STREAMINGCOMMUNITY FIXTURES ====================
+
+@pytest.fixture
+def sample_sc_series_data() -> Dict[str, Any]:
+    """
+    Provides sample StreamingCommunity TV series data for testing.
+
+    Returns:
+        Dict containing sample series information with SC-specific fields.
+    """
+    return {
+        "name": "Breaking Bad",
+        "link": "https://streamingcommunity.computer/it/titles/123-breaking-bad",
+        "last_update": "2024-01-15 10:30:00",
+        "episodi_scaricati": 10,
+        "numero_episodi": 62,
+        "provider": "streamingcommunity",
+        "slug": "breaking-bad",
+        "media_id": 123,
+        "provider_language": "it",
+        "year": "2008",
+        "seasons_data": '{"1": {"total": 7, "downloaded": [1, 2, 3]}}',
+    }
+
+
+@pytest.fixture
+def sample_sc_movie_data() -> Dict[str, Any]:
+    """
+    Provides sample StreamingCommunity movie data for testing.
+
+    Returns:
+        Dict containing sample movie information with SC-specific fields.
+    """
+    return {
+        "name": "The Matrix",
+        "link": "https://streamingcommunity.computer/it/titles/456-the-matrix",
+        "last_update": "2024-01-20 14:00:00",
+        "provider": "streamingcommunity",
+        "slug": "the-matrix",
+        "media_id": 456,
+        "provider_language": "it",
+        "year": "1999",
+    }
+
+
+@pytest.fixture
+def mock_streamingcommunity():
+    """
+    Mocks the StreamingCommunity client for testing without network calls.
+
+    Yields:
+        MagicMock: Mocked StreamingCommunity module components.
+    """
+    with patch("streamingcommunity.httpx") as mock_httpx:
+        # Mock HTTP client
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = """
+        <html>
+        <div id="app" data-page='{"version": "abc123", "props": {"titles": []}}'>
+        </div>
+        </html>
+        """
+        mock_response.json.return_value = {
+            "props": {
+                "titles": [
+                    {
+                        "id": 123,
+                        "name": "Test Series",
+                        "slug": "test-series",
+                        "type": "tv",
+                        "images": [],
+                        "translations": [{"key": "release_date", "value": "2020-01-01"}],
+                    }
+                ]
+            }
+        }
+        mock_client.get.return_value = mock_response
+        mock_httpx.Client.return_value = mock_client
+
+        yield mock_httpx
+
+
+@pytest.fixture
+def mock_sc_media_item():
+    """
+    Creates a sample MediaItem for testing.
+
+    Returns:
+        MediaItem: A sample media item object.
+    """
+    from streamingcommunity import MediaItem
+
+    return MediaItem(
+        id=123,
+        name="Test Series",
+        slug="test-series",
+        type="tv",
+        year="2020",
+        image=None,
+        provider_language="it"
+    )
+
+
+@pytest.fixture
+def mock_sc_series_info():
+    """
+    Creates a sample SeriesInfo for testing.
+
+    Returns:
+        SeriesInfo: A sample series info object with seasons.
+    """
+    from streamingcommunity import SeriesInfo, Season, Episode
+
+    season1 = Season(id=1, number=1, name="Season 1", slug="season-1")
+    season1.episodes = [
+        Episode(id=101, number=1, name="Pilot"),
+        Episode(id=102, number=2, name="Episode 2"),
+        Episode(id=103, number=3, name="Episode 3"),
+    ]
+
+    season2 = Season(id=2, number=2, name="Season 2", slug="season-2")
+    season2.episodes = [
+        Episode(id=201, number=1, name="Season 2 Premiere"),
+        Episode(id=202, number=2, name="Episode 2"),
+    ]
+
+    return SeriesInfo(
+        id=123,
+        name="Test Series",
+        slug="test-series",
+        year="2020",
+        plot="A test series for unit testing.",
+        seasons=[season1, season2]
+    )
+
+
+@pytest.fixture
+def series_folder_with_episodes(tmp_path) -> str:
+    """
+    Creates a temporary series folder with sample episode files.
+
+    Returns:
+        str: Path to the series folder with episodes.
+    """
+    series_folder = tmp_path / "Test Series" / "S01"
+    series_folder.mkdir(parents=True, exist_ok=True)
+
+    # Create sample episode files
+    for ep_num in [1, 2, 3]:
+        episode_file = series_folder / f"Test Series - S01E0{ep_num} - Episode {ep_num}.mp4"
+        episode_file.touch()
+
+    return str(tmp_path / "Test Series")
+
+
+@pytest.fixture
+def mock_miko_sc_database(temp_db, monkeypatch):
+    """
+    Patches MikoSC to use a temporary database.
+
+    This prevents MikoSC from trying to create /data/yuna.db.
+    """
+    monkeypatch.setenv("DATABASE_PATH", temp_db)
+
+    with patch("miko.Database") as mock_db:
+        # Create mock database with all required methods
+        mock_instance = MagicMock()
+        mock_instance.get_all_tv.return_value = []
+        mock_instance.get_all_movies.return_value = []
+        mock_instance.get_tv_by_name.return_value = None
+        mock_instance.get_movie_by_name.return_value = None
+        mock_instance.add_tv.return_value = True
+        mock_instance.add_movie.return_value = True
+        mock_instance.remove_tv.return_value = True
+        mock_instance.remove_movie.return_value = True
+        mock_db.return_value = mock_instance
+        yield mock_instance

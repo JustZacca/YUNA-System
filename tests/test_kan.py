@@ -830,3 +830,517 @@ class TestAggiornaLibreria:
                 # Should confirm to user
                 call_args = update.message.reply_text.call_args[0][0]
                 assert "aggiornamento" in call_args.lower()
+
+
+# ==================== STREAMINGCOMMUNITY COMMANDS TESTS ====================
+
+class TestKanSCInitialization:
+    """Tests for StreamingCommunity-related initialization in Kan."""
+
+    def test_kan_has_miko_sc_instance(self, mock_env, temp_db, mock_httpx):
+        """Verify that Kan has a MikoSC instance."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    # Must patch Database before Airi imports it
+                    from database import Database
+                    with patch.object(Database, "_init_database", return_value=None):
+                        with patch.object(Database, "get_all_anime", return_value=[]):
+                            from kan import Kan
+                            kan = Kan()
+                            assert kan.miko_sc is not None
+
+    def test_kan_has_sc_search_results_dict(self, mock_env, temp_db, mock_httpx):
+        """Verify that Kan has SC search results dictionary."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from database import Database
+                    with patch.object(Database, "_init_database", return_value=None):
+                        with patch.object(Database, "get_all_anime", return_value=[]):
+                            from kan import Kan
+                            kan = Kan()
+                            assert kan.sc_search_results == {}
+                            assert kan.sc_current_series == {}
+
+    def test_kan_has_sc_conversation_states(self, mock_env, temp_db, mock_httpx):
+        """Verify that Kan has SC conversation states."""
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    from database import Database
+                    with patch.object(Database, "_init_database", return_value=None):
+                        with patch.object(Database, "get_all_anime", return_value=[]):
+                            from kan import Kan
+                            kan = Kan()
+                            assert hasattr(kan, "SC_SEARCH")
+                            assert hasattr(kan, "SC_SELECT_SEASON")
+
+
+class TestCercaSC:
+    """Tests for /cerca_sc command."""
+
+    @pytest.mark.asyncio
+    async def test_cerca_sc_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that unauthorized users cannot search SC."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = 999999  # Unauthorized
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        await kan.cerca_sc(update, context)
+
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "non sei autorizzato" in call_args.lower()
+
+    @pytest.mark.asyncio
+    async def test_cerca_sc_authorized_prompts_search(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that authorized users get search prompt."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = kan.AUTHORIZED_USER_ID
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        result = await kan.cerca_sc(update, context)
+
+                        # Should return SC_SEARCH state
+                        assert result == kan.SC_SEARCH
+                        update.message.reply_text.assert_called_once()
+
+
+class TestReceiveSCSearch:
+    """Tests for SC search result handling."""
+
+    @pytest.mark.asyncio
+    async def test_receive_sc_search_no_results(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that no results message is shown."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = kan.AUTHORIZED_USER_ID
+                        update.message = MagicMock()
+                        update.message.text = "nonexistent query"
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        with patch.object(kan.miko_sc, "search", return_value=[]):
+                            result = await kan.receive_sc_search(update, context)
+
+                        # Should stay in search state
+                        assert result == kan.SC_SEARCH
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "nessun risultato" in call_args.lower()
+
+    @pytest.mark.asyncio
+    async def test_receive_sc_search_with_results(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that search results show keyboard."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+                        from streamingcommunity import MediaItem
+                        from telegram.ext import ConversationHandler
+
+                        kan = Kan()
+                        user_id = kan.AUTHORIZED_USER_ID
+
+                        mock_results = [
+                            MediaItem(id=1, name="Test Movie", slug="test-movie", type="movie", year="2024"),
+                            MediaItem(id=2, name="Test Series", slug="test-series", type="tv", year="2020"),
+                        ]
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = user_id
+                        update.message = MagicMock()
+                        update.message.text = "test query"
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        with patch.object(kan.miko_sc, "search", return_value=mock_results):
+                            result = await kan.receive_sc_search(update, context)
+
+                        # Should end conversation and show keyboard
+                        assert result == ConversationHandler.END
+                        assert user_id in kan.sc_search_results
+                        assert len(kan.sc_search_results[user_id]) == 2
+
+                        # Should have reply_markup
+                        call_kwargs = update.message.reply_text.call_args[1]
+                        assert "reply_markup" in call_kwargs
+
+
+class TestListaSerie:
+    """Tests for /lista_serie command."""
+
+    @pytest.mark.asyncio
+    async def test_lista_serie_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that unauthorized users cannot list series."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = 999999
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        await kan.lista_serie(update, context)
+
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "non sei autorizzato" in call_args.lower()
+
+    @pytest.mark.asyncio
+    async def test_lista_serie_empty(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that empty series list shows appropriate message."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = kan.AUTHORIZED_USER_ID
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        with patch.object(kan.miko_sc, "get_library_series", return_value=[]):
+                            await kan.lista_serie(update, context)
+
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "nessuna serie" in call_args.lower()
+
+    @pytest.mark.asyncio
+    async def test_lista_serie_with_data(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that series list is displayed correctly."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        # Mock library series
+                        mock_series = [
+                            {"name": "Test Series", "year": "2020", "episodi_scaricati": 10, "numero_episodi": 20}
+                        ]
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = kan.AUTHORIZED_USER_ID
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        with patch.object(kan.miko_sc, "get_library_series", return_value=mock_series):
+                            await kan.lista_serie(update, context)
+
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "Test Series" in call_args
+
+
+class TestListaFilm:
+    """Tests for /lista_film command."""
+
+    @pytest.mark.asyncio
+    async def test_lista_film_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that unauthorized users cannot list films."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = 999999
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        await kan.lista_film(update, context)
+
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "non sei autorizzato" in call_args.lower()
+
+    @pytest.mark.asyncio
+    async def test_lista_film_empty(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that empty film list shows appropriate message."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = kan.AUTHORIZED_USER_ID
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        with patch.object(kan.miko_sc, "get_library_films", return_value=[]):
+                            await kan.lista_film(update, context)
+
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "nessun film" in call_args.lower()
+
+
+class TestRimuoviSerie:
+    """Tests for /rimuovi_serie command."""
+
+    @pytest.mark.asyncio
+    async def test_rimuovi_serie_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that unauthorized users cannot remove series."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = 999999
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        await kan.rimuovi_serie(update, context)
+
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "non sei autorizzato" in call_args.lower()
+
+    @pytest.mark.asyncio
+    async def test_rimuovi_serie_empty_list(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that empty series list shows message."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = kan.AUTHORIZED_USER_ID
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        with patch.object(kan.miko_sc, "get_library_series", return_value=[]):
+                            await kan.rimuovi_serie(update, context)
+
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "nessuna serie" in call_args.lower()
+
+
+class TestBuildSeriesRemovalKeyboard:
+    """Tests for _build_series_removal_keyboard method."""
+
+    def test_build_series_removal_keyboard_with_series(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that keyboard includes series buttons."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+                        user_id = kan.AUTHORIZED_USER_ID
+
+                        # Mock get_library_series
+                        mock_series = [{"name": "Keyboard Test Series"}]
+                        with patch.object(kan.miko_sc, "get_library_series", return_value=mock_series):
+                            keyboard = kan._build_series_removal_keyboard(user_id)
+
+                        # Find series in keyboard
+                        keyboard_texts = []
+                        for row in keyboard.inline_keyboard:
+                            for button in row:
+                                keyboard_texts.append(button.text)
+
+                        assert any("Keyboard Test Series" in text for text in keyboard_texts)
+
+    def test_build_series_removal_keyboard_has_action_buttons(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify keyboard has action buttons."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+                        user_id = kan.AUTHORIZED_USER_ID
+
+                        with patch.object(kan.miko_sc, "get_library_series", return_value=[]):
+                            keyboard = kan._build_series_removal_keyboard(user_id)
+
+                        callback_data_list = []
+                        for row in keyboard.inline_keyboard:
+                            for button in row:
+                                callback_data_list.append(button.callback_data)
+
+                        assert "sc_removal_select_all" in callback_data_list
+                        assert "sc_removal_deselect_all" in callback_data_list
+                        assert "sc_removal_confirm" in callback_data_list
+                        assert "sc_removal_cancel" in callback_data_list
+
+
+class TestAggiornaSerie:
+    """Tests for /aggiorna_serie command."""
+
+    @pytest.mark.asyncio
+    async def test_aggiorna_serie_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that unauthorized users cannot update series."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = 999999
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        await kan.aggiorna_serie(update, context)
+
+                        call_args = update.message.reply_text.call_args[0][0]
+                        assert "non sei autorizzato" in call_args.lower()
+
+    @pytest.mark.asyncio
+    async def test_aggiorna_serie_no_updates(self, mock_env, temp_db, mock_httpx, monkeypatch):
+        """Verify that message is shown when no updates available."""
+        monkeypatch.setenv("DATABASE_PATH", temp_db)
+        with patch("airi.httpx", mock_httpx):
+            with patch("miko.aw") as mock_aw:
+                mock_aw.SES = MagicMock()
+                with patch("streamingcommunity.httpx"):
+                    with patch("miko.Database") as mock_db:
+                        mock_db.return_value = MagicMock()
+                        from kan import Kan
+
+                        kan = Kan()
+
+                        update = MagicMock()
+                        update.effective_user = MagicMock()
+                        update.effective_user.id = kan.AUTHORIZED_USER_ID
+                        update.message = MagicMock()
+                        update.message.reply_text = AsyncMock()
+
+                        context = MagicMock()
+
+                        with patch.object(kan.miko_sc, "check_and_download_new_episodes", new_callable=AsyncMock, return_value={}):
+                            await kan.aggiorna_serie(update, context)
+
+                        # Should show "all updated" message
+                        calls = update.message.reply_text.call_args_list
+                        messages = [call[0][0].lower() for call in calls]
+                        assert any("aggiornate" in msg for msg in messages)

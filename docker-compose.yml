@@ -9,11 +9,15 @@ services:
     env_file:
       - .env
     volumes:
-      # Anime download folder - change left side to your path
-      - /path/to/your/anime:/downloads
-      # Config persistence
-      - ./config.json:/app/config.json
-    # Optional: if you need to access logs
+      # Database persistente (IMPORTANTE: non perdere i dati!)
+      - ./data:/data
+
+      # Download folders - modifica i path a sinistra con i tuoi
+      - /path/to/your/anime:/downloads/anime
+      - /path/to/your/series:/downloads/series
+      - /path/to/your/movies:/downloads/movies
+
+    # Optional: logging configuration
     # logging:
     #   driver: "json-file"
     #   options:
