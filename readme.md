@@ -31,3 +31,11 @@
 
 ---
 
+# 🙏 Ringraziamenti
+
+Questo progetto utilizza risorse di terze parti che ne permettono il funzionamento:
+
+- **[Arrowar](https://github.com/Arrowar)** - Per il progetto [SC_Domains](https://github.com/Arrowar/SC_Domains) che fornisce gli URL aggiornati automaticamente per StreamingCommunity e altri siti di streaming.
+
+---
+

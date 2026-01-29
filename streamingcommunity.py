@@ -105,11 +105,12 @@ class SeriesInfo:
 class StreamingCommunityClient:
     """Client for interacting with StreamingCommunity."""
 
-    # Default domains to try
-    DEFAULT_DOMAINS = [
-        "https://streamingcommunity.computer",
-        "https://streamingcommunity.prof",
-        "https://streamingcommunity.blog",
+    # URL for fetching current domain
+    DOMAINS_API_URL = "https://raw.githubusercontent.com/Arrowar/SC_Domains/main/domains.json"
+
+    # Fallback domains (rarely used, only if API fails)
+    FALLBACK_DOMAINS = [
+        "https://streamingcommunityz.land",
     ]
 
     def __init__(self, base_url: str = None):
@@ -144,20 +145,47 @@ class StreamingCommunityClient:
             )
         return self._client
 
+    def _fetch_domain_from_api(self) -> Optional[str]:
+        """Fetch current StreamingCommunity domain from Arrowar's API."""
+        try:
+            client = httpx.Client(timeout=10)
+            response = client.get(self.DOMAINS_API_URL)
+            response.raise_for_status()
+
+            data = response.json()
+            # Look for streamingcommunity entry
+            if "streamingcommunity" in data:
+                sc_data = data["streamingcommunity"]
+                domain = sc_data.get("full_url", "").rstrip("/")
+                if domain:
+                    logger.info(f"StreamingCommunity URL from API: {domain}")
+                    client.close()
+                    return domain
+            client.close()
+        except Exception as e:
+            logger.warning(f"Failed to fetch domain from API: {e}")
+        return None
+
     def _detect_base_url(self) -> str:
         """Auto-detect working base URL."""
         if self.base_url:
             return self.base_url
 
-        for domain in self.DEFAULT_DOMAINS:
+        # Try to get domain from API first
+        api_domain = self._fetch_domain_from_api()
+        if api_domain:
+            self.base_url = api_domain
+            return self.base_url
+
+        # Fallback to hardcoded domains
+        for domain in self.FALLBACK_DOMAINS:
             try:
-                client = httpx.Client(follow_redirects=True, timeout=10)
+                client = httpx.Client(follow_redirects=False, timeout=10)
                 response = client.get(domain)
-                if response.status_code == 200:
-                    # Get final URL after redirects
-                    parsed = urlparse(str(response.url))
-                    self.base_url = f"{parsed.scheme}://{parsed.netloc}"
-                    logger.info(f"StreamingCommunity URL detected: {self.base_url}")
+                # Accept 200 or redirects that stay on same domain
+                if response.status_code in (200, 301, 302):
+                    self.base_url = domain
+                    logger.info(f"StreamingCommunity URL (fallback): {self.base_url}")
                     client.close()
                     return self.base_url
                 client.close()
@@ -165,9 +193,9 @@ class StreamingCommunityClient:
                 logger.debug(f"Failed to reach {domain}: {e}")
                 continue
 
-        # Fallback
-        self.base_url = self.DEFAULT_DOMAINS[0]
-        logger.warning(f"Using fallback URL: {self.base_url}")
+        # Last resort fallback
+        self.base_url = self.FALLBACK_DOMAINS[0]
+        logger.warning(f"Using last resort URL: {self.base_url}")
         return self.base_url
 
     def _get_version(self, lang: str = "it") -> str:
@@ -232,7 +260,20 @@ class StreamingCommunityClient:
                 response = client.get(search_url, params={"q": query})
                 response.raise_for_status()
 
-                data = response.json()
+                # Check if response is JSON (Inertia response)
+                content_type = response.headers.get("content-type", "")
+                if "application/json" not in content_type:
+                    # Got HTML response, try to parse Inertia data from page
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    app_div = soup.find("div", {"id": "app"})
+                    if app_div and app_div.get("data-page"):
+                        data = json.loads(app_div.get("data-page"))
+                    else:
+                        logger.warning(f"Non-JSON response for {lang}, skipping")
+                        continue
+                else:
+                    data = response.json()
+
                 titles = data.get("props", {}).get("titles", [])
 
                 for title in titles:
