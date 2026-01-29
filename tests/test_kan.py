@@ -226,10 +226,12 @@ class TestAuthorizationChecks:
 
                 await kan.start(update, context)
 
-                # Should reply with welcome message
+                # Should reply with welcome message (now includes keyboard)
                 update.message.reply_text.assert_called_once()
-                call_args = update.message.reply_text.call_args[0][0]
-                assert "benvenuto" in call_args.lower()
+                call_args = update.message.reply_text.call_args
+                message_text = call_args[0][0] if call_args[0] else call_args.kwargs.get("text", "")
+                # Check for YUNA in the welcome message (new format)
+                assert "yuna" in message_text.lower() or "benvenuto" in message_text.lower()
 
     @pytest.mark.asyncio
     async def test_lista_anime_unauthorized(self, mock_env, temp_db, mock_httpx):
@@ -488,7 +490,7 @@ class TestListaAnime:
                 await kan.lista_anime(update, context)
 
                 call_args = update.message.reply_text.call_args[0][0]
-                assert "vuota" in call_args.lower()
+                assert "nessun anime" in call_args.lower() or "vuota" in call_args.lower()
 
     @pytest.mark.asyncio
     async def test_lista_anime_with_data(self, mock_env, temp_db, mock_httpx):

@@ -4,6 +4,7 @@ import miko
 from miko import MikoSC
 from airi import Airi
 from download_manager import download_manager, TelegramProgress, get_unified_tracker, UnifiedProgressTracker
+from telegram_ui import Emoji, Messages, KeyboardBuilder, MenuTemplates, MessageFormatter
 import os
 import logging
 from color_utils import ColoredFormatter
@@ -51,6 +52,7 @@ class Kan:
         self.sc_search_results = {}  # user_id -> list of MediaItem
         self.sc_current_series = {}  # user_id -> SeriesInfo
         self.selected_series_for_removal = {}  # user_id -> set(series_names)
+        self.selected_films_for_removal = {}  # user_id -> set(film_names)
 
         # Conversation states for SC
         self.SC_SEARCH = 10
@@ -120,37 +122,135 @@ class Kan:
 
         if user_id != self.AUTHORIZED_USER_ID:
             self.logger.warning(f"Unauthorized access: {user_id}")
-            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            await update.message.reply_text(Messages.UNAUTHORIZED)
             return
 
         self.logger.info("Authorized. Sending welcome message.")
-        
-        anime_commands = [
-            "/aggiungi_anime - Aggiungi anime",
-            "/lista_anime - Lista anime",
-            "/trova_anime - Cerca anime",
-            "/download_episodi - Scarica episodi",
-            "/rimuovi_anime - Rimuovi anime",
-            "/aggiorna_libreria - Aggiorna anime",
-        ]
-        sc_commands = [
-            "/cerca_sc - Cerca film/serie TV",
-            "/lista_serie - Lista serie TV",
-            "/lista_film - Lista film",
-            "/aggiorna_serie - Scarica nuovi episodi",
-            "/rimuovi_serie - Rimuovi serie",
-        ]
-        system_commands = [
-            "/stop_bot - Arresta il bot",
-        ]
 
+        # Build interactive keyboard
+        keyboard = KeyboardBuilder()\
+            .button(f"{Emoji.SEARCH} Cerca Anime", "menu_trova_anime")\
+            .button(f"{Emoji.LIST} Lista Anime", "menu_lista_anime").row()\
+            .button(f"{Emoji.DOWNLOAD} Scarica Episodi", "menu_download")\
+            .button(f"{Emoji.REMOVE} Rimuovi Anime", "menu_rimuovi_anime").row()\
+            .button(f"{Emoji.SEARCH} Cerca Film/Serie", "menu_cerca_sc")\
+            .button(f"{Emoji.LIST} Lista Serie", "menu_lista_serie").row()\
+            .button(f"{Emoji.LIST} Lista Film", "menu_lista_film")\
+            .button(f"{Emoji.REFRESH} Aggiorna", "menu_aggiorna").row()\
+            .build()
+
+        welcome_text = f"""
+{Emoji.ANIME} *YUNA System — Media Manager*
+
+Usa i pulsanti o i comandi:
+
+{Emoji.ANIME} *Anime (AnimeWorld)*
+  /trova\\_anime • /lista\\_anime
+  /download\\_episodi • /rimuovi\\_anime
+
+{Emoji.SERIES} *Film/Serie (SC)*
+  /cerca\\_sc • /lista\\_serie • /lista\\_film
+  /aggiorna\\_serie • /rimuovi\\_serie
+"""
         await update.message.reply_text(
-            f"Benvenuto in KAN, spero tu sia Nicholas o non sei il benvenuto.\n\n"
-            f"*Anime (AnimeWorld):*\n" + "\n".join([f"  {c}" for c in anime_commands]) + "\n\n"
-            f"*Film/Serie (StreamingCommunity):*\n" + "\n".join([f"  {c}" for c in sc_commands]) + "\n\n"
-            f"*Sistema:*\n" + "\n".join([f"  {c}" for c in system_commands]),
-            parse_mode="Markdown"
+            welcome_text.strip(),
+            parse_mode="Markdown",
+            reply_markup=keyboard
         )
+
+    async def handle_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle main menu button clicks."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        action = query.data
+
+        # Map menu actions to handlers
+        if action == "menu_trova_anime":
+            await query.edit_message_text(Messages.SEARCH_ANIME, parse_mode="Markdown")
+            return self.SEARCH_NAME
+        elif action == "menu_lista_anime":
+            await self._show_anime_list(query)
+        elif action == "menu_download":
+            await self._show_download_menu(query)
+        elif action == "menu_rimuovi_anime":
+            await self._show_removal_menu(query, user_id)
+        elif action == "menu_cerca_sc":
+            await query.edit_message_text(Messages.SEARCH_SC, parse_mode="Markdown")
+        elif action == "menu_lista_serie":
+            await self._show_series_list(query)
+        elif action == "menu_lista_film":
+            await self._show_film_list(query)
+        elif action == "menu_aggiorna":
+            await query.edit_message_text(f"{Emoji.REFRESH} Aggiornamento libreria in corso...")
+            # Trigger update
+            asyncio.create_task(self._update_library_background(context.bot))
+
+    async def _show_anime_list(self, query):
+        """Show anime list from menu."""
+        anime_list = self.airi.get_anime()
+        text = MessageFormatter.format_anime_list(anime_list, self.airi.BASE_URL)
+        await query.edit_message_text(text, parse_mode="Markdown", disable_web_page_preview=True)
+
+    async def _show_download_menu(self, query):
+        """Show download selection menu."""
+        anime_list = self.airi.get_anime()
+        if not anime_list:
+            await query.edit_message_text(Messages.NO_ANIME)
+            return
+
+        items = [(a.get("name", "?"), a.get("name", "")) for a in anime_list]
+        keyboard = MenuTemplates.search_results(
+            [(name, name, "anime") for name, _ in items],
+            prefix="download_anime"
+        )
+        await query.edit_message_text(
+            f"{Emoji.DOWNLOAD} *Seleziona anime da scaricare:*",
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+
+    async def _show_removal_menu(self, query, user_id):
+        """Show removal selection menu."""
+        self.selected_anime_for_removal[user_id] = set()
+        keyboard = self._build_removal_keyboard(user_id)
+        await query.edit_message_text(
+            f"{Emoji.REMOVE} *Seleziona gli anime da rimuovere:*\n\n"
+            f"_Clicca per selezionare/deselezionare_",
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+
+    async def _show_series_list(self, query):
+        """Show series list from menu."""
+        series_list = self.miko_sc.get_library_series()
+        text = MessageFormatter.format_series_list(series_list)
+        await query.edit_message_text(text, parse_mode="Markdown")
+
+    async def _show_film_list(self, query):
+        """Show film list from menu."""
+        film_list = self.miko_sc.get_library_films()
+        text = MessageFormatter.format_film_list(film_list)
+        await query.edit_message_text(text, parse_mode="Markdown")
+
+    async def _update_library_background(self, bot):
+        """Background task to update library."""
+        try:
+            await self.miko_instance.checkNewEpisodes(bot)
+            await bot.send_message(
+                self.AUTHORIZED_USER_ID,
+                f"{Emoji.SUCCESS} Aggiornamento libreria completato."
+            )
+        except Exception as e:
+            self.logger.error(f"Library update error: {e}")
+            await bot.send_message(
+                self.AUTHORIZED_USER_ID,
+                f"{Emoji.ERROR} Errore aggiornamento: {e}"
+            )
 
     # Function to cancel the conversation
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -163,29 +263,19 @@ class Kan:
 
         if user_id != self.AUTHORIZED_USER_ID:
             self.logger.warning(f"Unauthorized access: {user_id}")
-            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            await update.message.reply_text(Messages.UNAUTHORIZED)
             return
 
         anime_list = self.airi.get_anime()
-
-        if not anime_list:
-            await update.message.reply_text("📭 La lista degli anime è vuota.")
-            return
-
-        anime_text = ""
-        for anime in anime_list:
-            name = anime.get("name", "Sconosciuto")
-            link = anime.get("link", "#")
-            anime_text += f"• [{name}]({link})\n"
-
-        await update.message.reply_text(f"📜 *Lista degli anime:*\n\n{anime_text}", parse_mode="Markdown")
+        text = MessageFormatter.format_anime_list(anime_list, self.airi.BASE_URL)
+        await update.message.reply_text(text, parse_mode="Markdown", disable_web_page_preview=True)
 
     async def trova_anime(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
 
         if user_id != self.AUTHORIZED_USER_ID:
             self.logger.warning(f"Unauthorized access: {user_id}")
-            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            await update.message.reply_text(Messages.UNAUTHORIZED)
             return
 
         await update.message.reply_text("Scrivi il nome dell'anime che vuoi cercare 🧐:")
@@ -282,22 +372,26 @@ class Kan:
         user_id = update.effective_user.id
 
         if user_id != self.AUTHORIZED_USER_ID:
-            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            await update.message.reply_text(Messages.UNAUTHORIZED)
             return
 
         anime_list = self.airi.get_anime()
         if not anime_list:
-            await update.message.reply_text("📭 La lista degli anime è vuota.")
+            await update.message.reply_text(Messages.NO_ANIME)
             return
 
-        keyboard = []
-
+        # Build keyboard with anime emoji
+        builder = KeyboardBuilder()
         for anime in anime_list:
             name = anime.get("name", "Sconosciuto")
-            keyboard.append([InlineKeyboardButton(name, callback_data=f"download_anime|{name}")])
+            builder.button(f"{Emoji.ANIME} {name}", f"download_anime|{name}").row()
+        builder.back_button("Annulla", "download_cancel")
 
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("Seleziona l'anime da scaricare:", reply_markup=reply_markup)
+        await update.message.reply_text(
+            f"{Emoji.DOWNLOAD} *Seleziona anime da scaricare:*",
+            parse_mode="Markdown",
+            reply_markup=builder.build()
+        )
 
 
 
@@ -1041,23 +1135,11 @@ class Kan:
         user_id = update.effective_user.id
 
         if user_id != self.AUTHORIZED_USER_ID:
-            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            await update.message.reply_text(Messages.UNAUTHORIZED)
             return
 
         series_list = self.miko_sc.get_library_series()
-
-        if not series_list:
-            await update.message.reply_text("📭 Nessuna serie TV nella libreria.")
-            return
-
-        text = "📺 *Serie TV nella libreria:*\n\n"
-        for series in series_list:
-            name = series.get("name", "Sconosciuto")
-            year = series.get("year", "")
-            downloaded = series.get("episodi_scaricati", 0)
-            total = series.get("numero_episodi", 0)
-            text += f"• *{name}* ({year}) - {downloaded}/{total} episodi\n"
-
+        text = MessageFormatter.format_series_list(series_list)
         await update.message.reply_text(text, parse_mode="Markdown")
 
     async def lista_film(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1065,22 +1147,11 @@ class Kan:
         user_id = update.effective_user.id
 
         if user_id != self.AUTHORIZED_USER_ID:
-            await update.message.reply_text("Non sei autorizzato a usare questo bot.")
+            await update.message.reply_text(Messages.UNAUTHORIZED)
             return
 
         films_list = self.miko_sc.get_library_films()
-
-        if not films_list:
-            await update.message.reply_text("📭 Nessun film nella libreria.")
-            return
-
-        text = "🎬 *Film nella libreria:*\n\n"
-        for film in films_list:
-            name = film.get("name", "Sconosciuto")
-            year = film.get("year", "")
-            downloaded = "✅" if film.get("scaricato") else "⏳"
-            text += f"• {downloaded} *{name}* ({year})\n"
-
+        text = MessageFormatter.format_film_list(films_list)
         await update.message.reply_text(text, parse_mode="Markdown")
 
     async def aggiorna_serie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1217,6 +1288,117 @@ class Kan:
         reply_markup = self._build_series_removal_keyboard(user_id)
         await query.edit_message_reply_markup(reply_markup=reply_markup)
 
+    # ==================== FILM REMOVAL ====================
+
+    async def rimuovi_film(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Command /rimuovi_film - Remove films from library."""
+        user_id = update.effective_user.id
+
+        if user_id != self.AUTHORIZED_USER_ID:
+            await update.message.reply_text(Messages.UNAUTHORIZED)
+            return
+
+        films_list = self.miko_sc.get_library_films()
+
+        if not films_list:
+            await update.message.reply_text(Messages.NO_FILMS)
+            return
+
+        # Initialize selection
+        if user_id not in self.selected_films_for_removal:
+            self.selected_films_for_removal[user_id] = set()
+
+        reply_markup = self._build_film_removal_keyboard(user_id)
+        await update.message.reply_text(
+            f"{Emoji.REMOVE} *Seleziona i film da rimuovere:*\n\n"
+            f"_Clicca per selezionare/deselezionare_",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+    def _build_film_removal_keyboard(self, user_id: int) -> InlineKeyboardMarkup:
+        """Build keyboard for film removal selection."""
+        films_list = self.miko_sc.get_library_films()
+        selected = self.selected_films_for_removal.get(user_id, set())
+
+        builder = KeyboardBuilder()
+        for film in films_list:
+            name = film.get("name", "?")
+            is_selected = name in selected
+            icon = Emoji.CHECKBOX_ON if is_selected else Emoji.CHECKBOX_OFF
+            builder.button(f"{icon} {name}", f"film_removal_toggle|{name}").row()
+
+        # Action buttons
+        builder.button(f"{Emoji.CHECKBOX_ON} Seleziona Tutti", "film_removal_select_all")
+        builder.button(f"{Emoji.CHECKBOX_OFF} Deseleziona", "film_removal_deselect_all").row()
+        builder.confirm_cancel(
+            confirm_text="Rimuovi",
+            confirm_data="film_removal_confirm",
+            cancel_data="film_removal_cancel"
+        )
+
+        return builder.build()
+
+    async def handle_film_removal_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle film removal toggle."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        data = query.data
+
+        if data.startswith("film_removal_toggle|"):
+            name = data.split("|", 1)[1]
+            selected = self.selected_films_for_removal.get(user_id, set())
+
+            if name in selected:
+                selected.discard(name)
+            else:
+                selected.add(name)
+
+            self.selected_films_for_removal[user_id] = selected
+
+        elif data == "film_removal_select_all":
+            films_list = self.miko_sc.get_library_films()
+            self.selected_films_for_removal[user_id] = {
+                f.get("name") for f in films_list
+            }
+
+        elif data == "film_removal_deselect_all":
+            self.selected_films_for_removal[user_id] = set()
+
+        elif data == "film_removal_cancel":
+            self.selected_films_for_removal.pop(user_id, None)
+            await query.edit_message_text(f"{Emoji.BACK} Operazione annullata.")
+            return
+
+        elif data == "film_removal_confirm":
+            selected = self.selected_films_for_removal.get(user_id, set())
+            if not selected:
+                await query.answer("Nessun film selezionato!", show_alert=True)
+                return
+
+            # Execute removal
+            results = []
+            for name in selected:
+                success = self.miko_sc.remove_film(name)
+                results.append(f"{Emoji.SUCCESS if success else Emoji.ERROR} {name}")
+
+            self.selected_films_for_removal.pop(user_id, None)
+
+            await query.edit_message_text(
+                f"{Emoji.REMOVE} *Rimozione completata:*\n\n" + "\n".join(results),
+                parse_mode="Markdown"
+            )
+            return
+
+        # Update keyboard
+        reply_markup = self._build_film_removal_keyboard(user_id)
+        await query.edit_message_reply_markup(reply_markup=reply_markup)
+
     async def aggiorna_libreria(self,update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.message.from_user.id
         self.logger.info(f"/aggiorna_libreria from {user_id}")
@@ -1260,6 +1442,7 @@ class Kan:
                 ('lista_film', 'Lista film'),
                 ('aggiorna_serie', 'Scarica nuovi episodi serie'),
                 ('rimuovi_serie', 'Rimuovi serie dalla libreria'),
+                ('rimuovi_film', 'Rimuovi film dalla libreria'),
                 # System
                 ('stop_bot', 'Arresta il bot'),
             ]
@@ -1314,6 +1497,9 @@ class Kan:
         )
         app.add_handler(cerca_sc_conversation)
 
+        # Main menu handler
+        app.add_handler(CallbackQueryHandler(self.handle_main_menu, pattern=r"^menu_"))
+
         # Callback query handlers con pattern specifici (ordine importante: pattern specifici prima)
         app.add_handler(CallbackQueryHandler(self.handle_anime_selection, pattern=r"^download_anime\|"))
         app.add_handler(CallbackQueryHandler(self.handle_inline_button, pattern=r"^anime_"))
@@ -1330,7 +1516,11 @@ class Kan:
         app.add_handler(CallbackQueryHandler(self.handle_sc_season_selection, pattern=r"^sc_season\|"))
         app.add_handler(CallbackQueryHandler(self.handle_sc_download_film, pattern=r"^sc_download_film\|"))
         app.add_handler(CallbackQueryHandler(self.handle_sc_removal_toggle, pattern=r"^sc_removal_"))
-        # RIMOSSO: handler duplicati senza pattern che catturavano tutto
+        app.add_handler(CallbackQueryHandler(self.handle_film_removal_toggle, pattern=r"^film_removal_"))
+
+        # Film removal command
+        app.add_handler(CommandHandler("rimuovi_film", self.rimuovi_film))
+
         aggiorna_libreria_handler = CommandHandler("aggiorna_libreria", self.aggiorna_libreria)
         app.add_handler(aggiorna_libreria_handler)
 
