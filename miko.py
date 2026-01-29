@@ -406,12 +406,11 @@ class MikoSC:
         self.description = "StreamingCommunity extension for MIKO"
         self.version = "1.0.0"
 
-        # Get folders from Airi config
+        # Get folders from Airi config (uses env vars MOVIES_FOLDER, SERIES_FOLDER)
         self.airi = Airi()
-        base_folder = self.airi.get_destination_folder()
 
-        self.movies_folder = movies_folder or os.path.join(base_folder, "Film")
-        self.series_folder = series_folder or os.path.join(base_folder, "Serie TV")
+        self.movies_folder = movies_folder or self.airi.get_movies_folder()
+        self.series_folder = series_folder or self.airi.get_series_folder()
 
         # Initialize StreamingCommunity client
         self.sc = StreamingCommunity(
