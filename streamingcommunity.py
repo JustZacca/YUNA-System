@@ -6,6 +6,7 @@ Handles search, info retrieval, and video download from StreamingCommunity.
 import os
 import re
 import json
+import time
 import logging
 import subprocess
 import asyncio
@@ -676,14 +677,15 @@ class HLSDownloader:
         return name.strip()
 
     async def download(self, playlist_url: str, output_name: str,
-                       progress_callback=None) -> Tuple[bool, str]:
+                       progress_callback=None, total_duration: float = None) -> Tuple[bool, str]:
         """
         Download HLS stream to file.
 
         Args:
             playlist_url: M3U8 playlist URL
             output_name: Output filename (without extension)
-            progress_callback: Optional callback for progress updates
+            progress_callback: Optional async callback(progress, elapsed, size)
+            total_duration: Total duration in seconds for progress calculation
 
         Returns:
             Tuple of (success, output_path or error message)
@@ -697,12 +699,15 @@ class HLSDownloader:
         # Check if file already exists
         if os.path.exists(output_path):
             logger.info(f"File already exists: {output_path}")
+            if progress_callback:
+                await progress_callback(1.0, 0, "0 MB")
             return (True, output_path)
 
         logger.info(f"Downloading to: {output_path}")
+        start_time = time.time()
 
         try:
-            # Build ffmpeg command
+            # Build ffmpeg command with progress output
             cmd = [
                 "ffmpeg",
                 "-i", playlist_url,
@@ -710,25 +715,82 @@ class HLSDownloader:
                 "-bsf:a", "aac_adtstoasc",  # Fix audio for MP4
                 "-movflags", "+faststart",  # Enable streaming
                 "-y",  # Overwrite output
-                "-loglevel", "warning",
-                "-stats",
+                "-progress", "pipe:1",  # Progress to stdout
+                "-loglevel", "error",
                 output_path
             ]
 
-            # Run ffmpeg
+            # Run ffmpeg with progress parsing
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
 
-            stdout, stderr = await process.communicate()
+            current_time = 0
+            last_callback = 0
+
+            # Read progress from stdout
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+
+                line = line.decode().strip()
+
+                # Parse out_time
+                if line.startswith("out_time="):
+                    time_str = line.split("=")[1]
+                    if time_str and time_str != "N/A":
+                        try:
+                            parts = time_str.split(":")
+                            if len(parts) == 3:
+                                h, m, s = parts
+                                current_time = int(h) * 3600 + int(m) * 60 + float(s)
+                        except:
+                            pass
+
+                # Parse total_size
+                size_str = "0 MB"
+                if line.startswith("total_size="):
+                    try:
+                        size_bytes = int(line.split("=")[1])
+                        size_str = f"{size_bytes / 1024 / 1024:.1f} MB"
+                    except:
+                        pass
+
+                # Call progress callback (rate limited)
+                now = time.time()
+                if now - last_callback >= 3:
+                    last_callback = now
+                    elapsed = now - start_time
+
+                    # Calculate progress
+                    if total_duration and total_duration > 0:
+                        progress = min(current_time / total_duration, 0.99)
+                    elif current_time > 0:
+                        # Estimate based on typical episode length (45 min)
+                        progress = min(current_time / 2700, 0.99)
+                    else:
+                        progress = 0
+
+                    # Log progress for debug
+                    logger.debug(f"Download progress: {progress:.1%} | Time: {current_time:.0f}s | Size: {size_str}")
+
+                    if progress_callback:
+                        await progress_callback(progress, elapsed, size_str)
+
+            await process.wait()
+            stdout, stderr = b"", await process.stderr.read()
 
             if process.returncode == 0:
                 # Verify file was created
                 if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                     file_size = os.path.getsize(output_path)
+                    elapsed = time.time() - start_time
                     logger.info(f"Download complete: {output_path} ({file_size / 1024 / 1024:.1f} MB)")
+                    if progress_callback:
+                        await progress_callback(1.0, elapsed, f"{file_size / 1024 / 1024:.1f} MB")
                     return (True, output_path)
                 else:
                     logger.error("Output file is empty or missing")
@@ -880,15 +942,17 @@ class StreamingCommunity:
         return await downloader.download(playlist_url, filename, progress_callback)
 
     async def download_season(self, series: SeriesInfo, season_number: int,
-                              lang: str = "it", progress_callback=None) -> Dict[int, Tuple[bool, str]]:
+                              lang: str = "it", progress_callback=None,
+                              max_parallel: int = 3) -> Dict[int, Tuple[bool, str]]:
         """
-        Download all episodes of a season.
+        Download all episodes of a season with parallel downloads.
 
         Args:
             series: SeriesInfo object
             season_number: Season number
             lang: Language code
-            progress_callback: Optional progress callback
+            progress_callback: Optional callback(episode_num, total, success)
+            max_parallel: Max parallel downloads (default: 3)
 
         Returns:
             Dict mapping episode numbers to (success, path or error)
@@ -902,14 +966,33 @@ class StreamingCommunity:
             self.get_season_episodes(series, season_number)
 
         results = {}
-        for episode in season.episodes:
-            success, result = await self.download_episode(
-                series, season_number, episode, lang, progress_callback
-            )
-            results[episode.number] = (success, result)
+        semaphore = asyncio.Semaphore(max_parallel)
+        completed = 0
+        total = len(season.episodes)
 
-            if progress_callback:
-                progress_callback(episode.number, len(season.episodes))
+        async def download_with_semaphore(episode):
+            nonlocal completed
+            async with semaphore:
+                success, result = await self.download_episode(
+                    series, season_number, episode, lang
+                )
+                completed += 1
+                if progress_callback:
+                    await progress_callback(completed, total, episode.number, success)
+                return episode.number, (success, result)
+
+        # Create all download tasks
+        tasks = [download_with_semaphore(ep) for ep in season.episodes]
+
+        # Run all tasks concurrently (semaphore limits parallelism)
+        completed_tasks = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for task_result in completed_tasks:
+            if isinstance(task_result, Exception):
+                logger.error(f"Episode download error: {task_result}")
+            else:
+                ep_num, result = task_result
+                results[ep_num] = result
 
         return results
 

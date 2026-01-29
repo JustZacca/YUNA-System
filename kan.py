@@ -3,6 +3,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 import miko
 from miko import MikoSC
 from airi import Airi
+from download_manager import download_manager, TelegramProgress
 import os
 import logging
 from color_utils import ColoredFormatter
@@ -837,46 +838,115 @@ class Kan:
             if not self.miko_sc.db.get_tv_by_name(series_info.name):
                 self.miko_sc.add_series_to_library()
 
+            chat_id = query.message.chat_id
+            bot = context.bot
+
             if season_str == "all":
-                # Download all seasons
+                # Download all seasons in background
                 await query.edit_message_text(
-                    f"📥 Inizio download di tutte le stagioni di *{series_info.name}*...\n"
-                    f"Questo potrebbe richiedere tempo.",
+                    f"📥 *{series_info.name}*\n"
+                    f"Download di tutte le stagioni avviato in background.\n"
+                    f"Il bot rimane disponibile per altri comandi.",
                     parse_mode="Markdown"
                 )
 
-                for season in series_info.seasons:
-                    await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=f"⏳ Scaricando Stagione {season.number}..."
+                # Start background download task
+                asyncio.create_task(
+                    self._download_all_seasons_background(
+                        bot, chat_id, series_info
                     )
-                    results = await self.miko_sc.download_season(series_info.name, season.number)
-                    successes = sum(1 for s, _ in results.values() if s)
-                    await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=f"✅ Stagione {season.number}: {successes}/{len(results)} episodi scaricati"
-                    )
-
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=f"🎉 Download di *{series_info.name}* completato!",
-                    parse_mode="Markdown"
                 )
             else:
-                # Download single season
+                # Download single season in background
                 season_num = int(season_str)
-                await query.edit_message_text(
-                    f"📥 Scaricando Stagione {season_num} di *{series_info.name}*...",
+
+                # Send initial progress message
+                progress_msg = await bot.send_message(
+                    chat_id=chat_id,
+                    text=f"📥 *{series_info.name}* - Stagione {season_num}\n"
+                         f"`[░░░░░░░░░░]` 0%\n"
+                         f"Avvio download...",
                     parse_mode="Markdown"
                 )
 
-                results = await self.miko_sc.download_season(series_info.name, season_num)
-                successes = sum(1 for s, _ in results.values() if s)
-
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=f"✅ Stagione {season_num}: {successes}/{len(results)} episodi scaricati"
+                await query.edit_message_text(
+                    f"✅ Download avviato in background.\n"
+                    f"Puoi continuare ad usare il bot.",
+                    parse_mode="Markdown"
                 )
+
+                # Start background download task
+                asyncio.create_task(
+                    self._download_season_background(
+                        bot, chat_id, progress_msg.message_id,
+                        series_info, season_num
+                    )
+                )
+
+    async def _download_season_background(self, bot, chat_id, message_id, series_info, season_num):
+        """Background task to download a season with progress updates."""
+        progress = TelegramProgress(bot, chat_id, message_id)
+        results = {"success": 0, "failed": 0, "total": 0}
+
+        async def episode_progress(completed, total, ep_num, success):
+            results["total"] = total
+            if success:
+                results["success"] += 1
+            else:
+                results["failed"] += 1
+
+            await progress.update(
+                progress=completed / total,
+                text=f"{series_info.name} S{season_num:02d}",
+                elapsed=0
+            )
+
+        try:
+            download_results = await self.miko_sc.download_season(
+                series_info.name, season_num,
+                progress_callback=episode_progress
+            )
+
+            # Final message
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=f"✅ *{series_info.name}* - Stagione {season_num}\n"
+                     f"Completato: {results['success']}/{results['total']} episodi\n"
+                     f"{'❌ Falliti: ' + str(results['failed']) if results['failed'] else ''}",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            self.logger.error(f"Background download error: {e}")
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=f"❌ Errore download: {e}",
+                parse_mode="Markdown"
+            )
+
+    async def _download_all_seasons_background(self, bot, chat_id, series_info):
+        """Background task to download all seasons."""
+        total_seasons = len(series_info.seasons)
+
+        for i, season in enumerate(series_info.seasons):
+            progress_msg = await bot.send_message(
+                chat_id=chat_id,
+                text=f"📥 *{series_info.name}* - Stagione {season.number} ({i+1}/{total_seasons})\n"
+                     f"`[░░░░░░░░░░]` 0%",
+                parse_mode="Markdown"
+            )
+
+            await self._download_season_background(
+                bot, chat_id, progress_msg.message_id,
+                series_info, season.number
+            )
+
+        await bot.send_message(
+            chat_id=chat_id,
+            text=f"🎉 *{series_info.name}*\nTutte le stagioni completate!",
+            parse_mode="Markdown"
+        )
 
     async def handle_sc_download_film(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle film download."""
@@ -897,29 +967,82 @@ class Kan:
                 item = results[idx]
                 self.miko_sc.current_item = item
 
-                await query.edit_message_text(
-                    f"📥 Scaricando *{item.name}*...\n"
-                    f"Questo potrebbe richiedere tempo.",
-                    parse_mode="Markdown"
-                )
+                chat_id = query.message.chat_id
+                bot = context.bot
 
                 # Add to library
                 self.miko_sc.add_film_to_library(item)
 
-                # Download
-                success, result = await self.miko_sc.download_film(item)
+                # Send progress message
+                progress_msg = await bot.send_message(
+                    chat_id=chat_id,
+                    text=f"📥 *{item.name}*\n"
+                         f"`[░░░░░░░░░░]` 0%\n"
+                         f"Avvio download...",
+                    parse_mode="Markdown"
+                )
 
-                if success:
-                    await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=f"✅ Film *{item.name}* scaricato con successo!",
-                        parse_mode="Markdown"
+                await query.edit_message_text(
+                    f"✅ Download avviato in background.\n"
+                    f"Puoi continuare ad usare il bot.",
+                    parse_mode="Markdown"
+                )
+
+                # Start background download task
+                asyncio.create_task(
+                    self._download_film_background(
+                        bot, chat_id, progress_msg.message_id, item
                     )
-                else:
-                    await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=f"❌ Errore nel download: {result}"
-                    )
+                )
+
+    async def _download_film_background(self, bot, chat_id, message_id, item):
+        """Background task to download a film with progress updates."""
+        progress = TelegramProgress(bot, chat_id, message_id)
+        start_time = asyncio.get_event_loop().time()
+
+        async def film_progress(prog, elapsed, size):
+            self.logger.debug(f"Film progress: {prog:.1%} - {size}")
+            await progress.update(
+                progress=prog,
+                text=item.name,
+                elapsed=elapsed,
+                size=size
+            )
+
+        try:
+            success, result = await self.miko_sc.download_film(
+                item, progress_callback=film_progress
+            )
+
+            elapsed = asyncio.get_event_loop().time() - start_time
+
+            if success:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=f"✅ *{item.name}*\n"
+                         f"Download completato!\n"
+                         f"⏱️ Tempo: {int(elapsed//60)}:{int(elapsed%60):02d}",
+                    parse_mode="Markdown"
+                )
+                self.logger.info(f"Film download completed: {item.name}")
+            else:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=f"❌ *{item.name}*\nErrore: {result}",
+                    parse_mode="Markdown"
+                )
+                self.logger.error(f"Film download failed: {item.name} - {result}")
+
+        except Exception as e:
+            self.logger.error(f"Background film download error: {e}")
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=f"❌ Errore download: {e}",
+                parse_mode="Markdown"
+            )
 
     async def lista_serie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Command /lista_serie - List all tracked TV series."""
