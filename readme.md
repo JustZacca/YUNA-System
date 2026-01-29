@@ -53,24 +53,14 @@
    cd yuna-system
    ```
 
-2. **Configura le variabili d'ambiente**
-   ```bash
-   cp .env.example .env
-   # Modifica .env con i tuoi valori
-   ```
-
-3. **Configura Docker Compose**
+2. **Configura Docker Compose**
    ```bash
    cp docker-compose.example.yml docker-compose.yml
-   # Modifica docker-compose.yml con i tuoi path
    ```
-   ```yaml
-   volumes:
-     - ./data:/data
-     - /path/to/anime:/downloads/anime
-     - /path/to/series:/downloads/series
-     - /path/to/movies:/downloads/movies
-   ```
+
+3. **Modifica `docker-compose.yml`**
+   - Inserisci il tuo `TELEGRAM_TOKEN` e `CHAT_ID`
+   - Modifica i path dei volumi con le tue cartelle
 
 4. **Avvia il container**
    ```bash
@@ -79,25 +69,39 @@
 
 ---
 
-## Configurazione (.env)
+## Configurazione
 
-```env
-# Telegram
-TELEGRAM_TOKEN=your_bot_token
-CHAT_ID=your_chat_id
+### Variabili d'ambiente
 
-# Cartelle download
-DESTINATION_FOLDER=/downloads/anime
-MOVIES_FOLDER=/downloads/movies
-SERIES_FOLDER=/downloads/series
+In `docker-compose.yml`, sezione `environment`:
 
-# Jellyfin (opzionale)
-JELLYFIN_URL=http://your-jellyfin:8096
-JELLYFIN_API_KEY=your_api_key
+| Variabile | Obbligatorio | Descrizione |
+|-----------|--------------|-------------|
+| `TELEGRAM_TOKEN` | Si | Token del bot Telegram |
+| `CHAT_ID` | Si | Il tuo Chat ID Telegram |
+| `JELLYFIN_URL` | No | URL del server Jellyfin |
+| `JELLYFIN_API_KEY` | No | API Key di Jellyfin |
+| `UPDATE_TIME` | No | Intervallo aggiornamento in minuti (default: 60) |
 
-# Aggiornamento automatico (minuti)
-UPDATE_TIME=60
+### Volumi
+
+I volumi mappano le cartelle del tuo sistema alle cartelle interne del container:
+
+```yaml
+volumes:
+  - /tuo/path/locale:/path/interno/container
 ```
+
+| Volume | Descrizione |
+|--------|-------------|
+| `./data:/data` | Database (non modificare) |
+| `/path/to/anime:/downloads/anime` | Cartella anime |
+| `/path/to/series:/downloads/series` | Cartella serie TV |
+| `/path/to/movies:/downloads/movies` | Cartella film |
+
+**Modifica solo la parte sinistra** (prima dei `:`) con i tuoi path locali.
+
+Per uso locale senza Docker, vedi `.env.example`.
 
 ---
 

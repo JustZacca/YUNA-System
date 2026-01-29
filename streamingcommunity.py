@@ -338,10 +338,14 @@ class StreamingCommunityClient:
             SeriesInfo object or None
         """
         base_url = self._detect_base_url()
-        version = self._get_version(lang)
 
         try:
-            client = self._create_client()
+            # Use fresh client without Inertia headers for HTML page
+            client = httpx.Client(
+                headers=self._get_headers(),
+                follow_redirects=True,
+                timeout=30.0
+            )
 
             # Get series info
             url = f"{base_url}/{lang}/titles/{media_id}-{slug}"

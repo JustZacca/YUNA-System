@@ -1,28 +1,36 @@
 # YUNA-System Docker Compose
-# Usage:
+#
+# Setup:
 #   1. cp docker-compose.example.yml docker-compose.yml
-#   2. Modifica i path dei volumi
-#   3. docker compose up -d
+#   2. Modifica TELEGRAM_TOKEN e CHAT_ID
+#   3. Modifica i path dei volumi (parte sinistra dei ":")
+#   4. docker compose up -d
 
 services:
   yuna:
     image: ghcr.io/justzacca/yuna-system:latest
     container_name: yuna-system
     restart: unless-stopped
-    env_file:
-      - .env
+
+    environment:
+      # Telegram (obbligatorio)
+      - TELEGRAM_TOKEN=your_bot_token_here
+      - CHAT_ID=your_chat_id_here
+
+      # Jellyfin (opzionale)
+      # - JELLYFIN_URL=http://your-jellyfin:8096
+      # - JELLYFIN_API_KEY=your_api_key
+
+      # Intervallo aggiornamento in minuti (default: 60)
+      # - UPDATE_TIME=60
+
     volumes:
-      # Database persistente (IMPORTANTE: non perdere i dati!)
+      # Database - NON MODIFICARE la parte destra
       - ./data:/data
 
-      # Download folders - modifica i path a sinistra con i tuoi
+      # Download folders
+      # Modifica SOLO la parte SINISTRA con i tuoi path locali
+      # La parte destra (/downloads/*) deve restare invariata
       - /path/to/your/anime:/downloads/anime
       - /path/to/your/series:/downloads/series
       - /path/to/your/movies:/downloads/movies
-
-    # Optional: logging configuration
-    # logging:
-    #   driver: "json-file"
-    #   options:
-    #     max-size: "10m"
-    #     max-file: "3"
