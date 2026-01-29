@@ -54,12 +54,18 @@ def mock_env(monkeypatch, tmp_path) -> Dict[str, str]:
     """
     db_path = str(tmp_path / "test_yuna.db")
     download_folder = str(tmp_path / "downloads")
+    movies_folder = str(tmp_path / "downloads" / "movies")
+    series_folder = str(tmp_path / "downloads" / "series")
     os.makedirs(download_folder, exist_ok=True)
+    os.makedirs(movies_folder, exist_ok=True)
+    os.makedirs(series_folder, exist_ok=True)
 
     env_vars = {
         "TELEGRAM_TOKEN": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
         "TELEGRAM_CHAT_ID": "123456789",
         "DESTINATION_FOLDER": download_folder,
+        "MOVIES_FOLDER": movies_folder,
+        "SERIES_FOLDER": series_folder,
         "UPDATE_TIME": "60",
         "BASE_URL_SC": "https://test.streamingunity.shop",
         "DATABASE_PATH": db_path,
