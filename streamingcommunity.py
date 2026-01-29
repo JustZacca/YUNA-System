@@ -504,7 +504,6 @@ class VideoSource:
         video_match = re.search(r'window\.video\s*=\s*(\{[^}]+\})', script_text, re.DOTALL)
         if video_match:
             try:
-                # Clean and parse JSON-like object
                 video_str = video_match.group(1)
                 video_str = re.sub(r"'", '"', video_str)
                 video_str = re.sub(r'(\w+):', r'"\1":', video_str)
@@ -512,24 +511,55 @@ class VideoSource:
             except:
                 pass
 
-        # Parse window.masterPlaylist
-        playlist_match = re.search(r'window\.masterPlaylist\s*=\s*(\{.+?\});', script_text, re.DOTALL)
-        if playlist_match:
+        # Parse window.streams (new format)
+        streams_match = re.search(r'window\.streams\s*=\s*(\[.+?\]);', script_text, re.DOTALL)
+        if streams_match:
             try:
-                playlist_str = playlist_match.group(1)
-                # Extract URL
-                url_match = re.search(r'url:\s*["\']([^"\']+)["\']', playlist_str)
-                token_match = re.search(r'token:\s*["\']([^"\']+)["\']', playlist_str)
-                expires_match = re.search(r'expires:\s*["\']?(\d+)["\']?', playlist_str)
+                streams_str = streams_match.group(1).replace("\\/", "/")
+                streams = json.loads(streams_str)
+                # Get first active stream or first stream
+                for stream in streams:
+                    if stream.get("active", False):
+                        result['playlist_url'] = stream.get("url")
+                        break
+                if 'playlist_url' not in result and streams:
+                    result['playlist_url'] = streams[0].get("url")
+                logger.debug(f"Found streams: {len(streams)}")
+            except Exception as e:
+                logger.debug(f"Failed to parse streams: {e}")
 
-                if url_match:
-                    result['playlist_url'] = url_match.group(1).replace('\\/', '/')
+        # Parse window.masterPlaylist.params (new format)
+        params_match = re.search(r"window\.masterPlaylist\s*=\s*\{[^}]*params:\s*\{([^}]+)\}", script_text, re.DOTALL)
+        if params_match:
+            try:
+                params_str = params_match.group(1)
+                token_match = re.search(r"['\"]token['\"]\s*:\s*['\"]([^'\"]+)['\"]", params_str)
+                expires_match = re.search(r"['\"]expires['\"]\s*:\s*['\"]?(\d+)['\"]?", params_str)
                 if token_match:
                     self._token = token_match.group(1)
                 if expires_match:
                     self._expires = expires_match.group(1)
             except:
                 pass
+
+        # Legacy format: Parse window.masterPlaylist with url directly
+        if 'playlist_url' not in result:
+            playlist_match = re.search(r'window\.masterPlaylist\s*=\s*(\{.+?\});', script_text, re.DOTALL)
+            if playlist_match:
+                try:
+                    playlist_str = playlist_match.group(1)
+                    url_match = re.search(r'url:\s*["\']([^"\']+)["\']', playlist_str)
+                    token_match = re.search(r'token:\s*["\']([^"\']+)["\']', playlist_str)
+                    expires_match = re.search(r'expires:\s*["\']?(\d+)["\']?', playlist_str)
+
+                    if url_match:
+                        result['playlist_url'] = url_match.group(1).replace('\\/', '/')
+                    if token_match:
+                        self._token = token_match.group(1)
+                    if expires_match:
+                        self._expires = expires_match.group(1)
+                except:
+                    pass
 
         # Parse window.canPlayFHD
         fhd_match = re.search(r'window\.canPlayFHD\s*=\s*(true|false)', script_text)
@@ -550,21 +580,30 @@ class VideoSource:
             return False
 
         try:
-            client = httpx.Client(headers=self._get_headers(), follow_redirects=True, timeout=30)
+            headers = self._get_headers()
+            headers["Referer"] = self.base_url + "/"
+            client = httpx.Client(headers=headers, follow_redirects=True, timeout=30)
 
             response = client.get(self.iframe_src)
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, "html.parser")
-            script = soup.find("body")
-            if script:
-                script_tag = script.find("script")
-                if script_tag:
-                    vars_data = self._parse_window_vars(script_tag.text)
-                    if 'playlist_url' in vars_data:
-                        self.master_playlist = vars_data['playlist_url']
-                        logger.debug(f"Found playlist URL: {self.master_playlist}")
-                        return True
+            body = soup.find("body")
+            if body:
+                # Collect all script content
+                all_scripts = []
+                for script_tag in body.find_all("script"):
+                    if script_tag.string:
+                        all_scripts.append(script_tag.string)
+
+                # Parse combined script content
+                combined_scripts = "\n".join(all_scripts)
+                vars_data = self._parse_window_vars(combined_scripts)
+
+                if 'playlist_url' in vars_data:
+                    self.master_playlist = vars_data['playlist_url']
+                    logger.info(f"Found playlist URL: {self.master_playlist}")
+                    return True
 
             logger.error("Could not parse video content")
             return False

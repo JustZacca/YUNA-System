@@ -59,7 +59,11 @@
    # Modifica .env con i tuoi valori
    ```
 
-3. **Configura i volumi in `docker-compose.yml`**
+3. **Configura Docker Compose**
+   ```bash
+   cp docker-compose.example.yml docker-compose.yml
+   # Modifica docker-compose.yml con i tuoi path
+   ```
    ```yaml
    volumes:
      - ./data:/data
@@ -165,6 +169,7 @@ docker build -t yuna-system:local .
 
 Questo progetto utilizza risorse di terze parti:
 
+- **[MainKronos](https://github.com/MainKronos)** - Per [AnimeWorld-API](https://github.com/MainKronos/AnimeWorld-API), la libreria Python non ufficiale per AnimeWorld
 - **[Arrowar](https://github.com/Arrowar)** - Per [SC_Domains](https://github.com/Arrowar/SC_Domains), che fornisce gli URL aggiornati automaticamente per StreamingCommunity e altri siti di streaming
 - **[AnimeWorld](https://www.animeworld.ac)** - Fonte per il download degli anime
 - **[StreamingCommunity](https://streamingcommunity.computer)** - Fonte per serie TV e film

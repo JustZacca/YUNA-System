@@ -10,6 +10,16 @@
 downloads/
 /downloads/
 
+# Database files
+data/
+/data/
+*.db
+yuna.db
+
+# Docker compose (user-specific paths)
+docker-compose.yml
+!docker-compose.example.yml
+
 # Config files (contain user data)
 config.json
 /config.json

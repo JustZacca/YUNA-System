@@ -1,5 +1,8 @@
 # YUNA-System Docker Compose
-# Usage: docker compose up -d
+# Usage:
+#   1. cp docker-compose.example.yml docker-compose.yml
+#   2. Modifica i path dei volumi
+#   3. docker compose up -d
 
 services:
   yuna:
