@@ -413,11 +413,15 @@ Seleziona una categoria:
     async def _download_anime_episodes_for_name(self, name: str, link: str, bot, tracker):
         """Download missing episodes for a single anime."""
         try:
+            # Create a NEW Miko instance to avoid race conditions with parallel downloads
+            from yuna.services.media_service import Miko
+            miko = Miko()
+
             # Load the anime
-            await self.miko_instance.loadAnime(link)
+            await miko.loadAnime(link)
 
             # Get missing episodes
-            missing = await self.miko_instance.getMissingEpisodes()
+            missing = await miko.getMissingEpisodes()
             if not missing:
                 self.logger.info(f"No missing episodes for {name}")
                 return
@@ -429,7 +433,7 @@ Seleziona una categoria:
                 tracker.update_progress(dl_id, prog)
 
             # Download
-            await self.miko_instance.downloadEpisodes(missing, progress_callback=anime_progress)
+            await miko.downloadEpisodes(missing, progress_callback=anime_progress)
 
             tracker.complete_download(dl_id, success=True)
             self.logger.info(f"Anime download completed: {name}")
