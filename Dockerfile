@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     jq \
-    libicu72 \
+    libicu-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
