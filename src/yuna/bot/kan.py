@@ -666,12 +666,26 @@ Seleziona una categoria:
         )
 
     async def _update_library_background(self, bot):
-        """Background task to update library."""
+        """Background task to update library - checks episode counts for all anime."""
         try:
-            await self.miko_instance.checkNewEpisodes(bot)
+            anime_list = self.airi.get_anime()
+            updated = 0
+            for anime in anime_list:
+                name = anime.get("name")
+                link = anime.get("link")
+                if name and link:
+                    try:
+                        await self.miko_instance.loadAnime(link)
+                        episodes = await self.miko_instance.getEpisodes()
+                        if episodes:
+                            self.airi.update_episodes_number(name, len(episodes))
+                            updated += 1
+                    except Exception as e:
+                        self.logger.warning(f"Error updating {name}: {e}")
             await bot.send_message(
                 self.AUTHORIZED_USER_ID,
-                f"{Emoji.SUCCESS} Aggiornamento libreria completato.",
+                f"{Emoji.SUCCESS} Aggiornamento libreria completato.\n"
+                f"Aggiornati {updated}/{len(anime_list)} anime.",
                 reply_markup=self._back_to_menu_keyboard()
             )
         except Exception as e:
