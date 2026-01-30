@@ -10,8 +10,7 @@
 downloads/
 /downloads/
 
-# Database files
-data/
+# Database files (only root /data/ folder, not src/yuna/data/)
 /data/
 *.db
 yuna.db
