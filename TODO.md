@@ -57,6 +57,14 @@ Cache in-memory con TTL (no Redis, overkill per uso personale):
 | Metadati TMDB/AniList | 24-48 ore |
 | URL video | 5-10 min |
 
+## Download HLS Veloce con N_m3u8DL-RE
+
+Sostituire ffmpeg con N_m3u8DL-RE per download HLS paralleli:
+- Download segmenti in parallelo (molto più veloce)
+- Supporto nativo per stream criptati
+- Merge automatico in MP4
+- https://github.com/nilaoda/N_m3u8DL-RE
+
 ## Provider Altadefinizione
 
 Da implementare come fallback per StreamingCommunity:

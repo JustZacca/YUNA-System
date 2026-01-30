@@ -207,10 +207,10 @@ YUNA-System/
 ## Fasi di Implementazione
 
 ### Fase 1: FastAPI Backend Foundation
-- [ ] Creare `src/yuna/api/main.py` con FastAPI app
-- [ ] Implementare `src/yuna/api/auth.py` (JWT, login)
-- [ ] Creare `src/yuna/api/deps.py` (dependencies)
-- [ ] Route base: health check, versione
+- [x] Creare `src/yuna/api/main.py` con FastAPI app
+- [x] Implementare `src/yuna/api/auth.py` (JWT, login)
+- [x] Creare `src/yuna/api/deps.py` (dependencies)
+- [x] Route base: health check, versione
 
 ### Fase 2: API Routes
 - [ ] `routes/auth.py` - POST /api/login, GET /api/me

@@ -28,6 +28,12 @@ colorama>=0.4.6
 # Optional: Streaming Unity API (for gats.py)
 # scuapi>=1.0.0
 
+# FastAPI (PWA Backend)
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
 # Testing dependencies
 pytest>=8.0.0
 pytest-asyncio>=1.0.0
