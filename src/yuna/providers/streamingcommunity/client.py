@@ -17,6 +17,16 @@ from dataclasses import dataclass, field
 import httpx
 from bs4 import BeautifulSoup
 
+# Try to import N_m3u8DL-RE, use fallback if not available
+try:
+    from yuna.providers.streamingcommunity.nm3u8_downloader import Nm3u8Config, create_downloader
+    from yuna.config import config as yuna_config
+    NM3U8_AVAILABLE = True
+except ImportError:
+    NM3U8_AVAILABLE = False
+    yuna_config = None
+    logging.warning("N_m3u8DL-RE downloader not available, will use ffmpeg fallback")
+
 try:
     from fake_useragent import UserAgent
     ua = UserAgent()
@@ -824,6 +834,25 @@ class StreamingCommunity:
         self.movies_folder = movies_folder
         self.series_folder = series_folder
         self._base_url = None
+        
+        # Load configuration from environment if available
+        if yuna_config:
+            self.prefer_nm3u8 = yuna_config.prefer_nm3u8 and NM3U8_AVAILABLE
+            self.thread_count = yuna_config.nm3u8_thread_count
+            self.max_speed = yuna_config.nm3u8_max_speed
+            self.nm3u8_timeout = yuna_config.nm3u8_timeout
+            self.nm3u8_binary_path = yuna_config.nm3u8_binary_path
+            self.nm3u8_temp_dir = yuna_config.nm3u8_temp_dir
+        else:
+            # Default values
+            self.prefer_nm3u8 = NM3U8_AVAILABLE
+            self.thread_count = 16
+            self.max_speed = None
+            self.nm3u8_timeout = 100
+            self.nm3u8_binary_path = None
+            self.nm3u8_temp_dir = None
+        
+        logger.info(f"StreamingCommunity initialized (N_m3u8DL-RE: {'enabled' if self.prefer_nm3u8 else 'disabled'})")
 
     @property
     def base_url(self) -> str:
@@ -896,8 +925,35 @@ class StreamingCommunity:
 
         # Create folder for film
         film_folder = os.path.join(self.movies_folder, item.name)
+        
+        # Try to use N_m3u8DL-RE if available and preferred
+        if self.prefer_nm3u8 and NM3U8_AVAILABLE:
+            try:
+                # Configure N_m3u8DL-RE
+                config = Nm3u8Config(
+                    binary_path=self.nm3u8_binary_path,
+                    thread_count=self.thread_count,
+                    timeout=self.nm3u8_timeout,
+                    auto_select=True,
+                    concurrent_download=True,
+                    max_speed=self.max_speed,
+                    temp_dir=self.nm3u8_temp_dir,
+                    headers={
+                        "User-Agent": get_user_agent(),
+                        "Referer": self.base_url + "/"
+                    }
+                )
+                
+                downloader = create_downloader(film_folder, prefer_nm3u8=True, config=config)
+                logger.info(f"Using N_m3u8DL-RE downloader for {item.name}")
+                return await downloader.download(playlist_url, item.name, progress_callback)
+                
+            except Exception as e:
+                logger.warning(f"N_m3u8DL-RE failed, falling back to ffmpeg: {e}")
+        
+        # Fallback to ffmpeg/HLSDownloader
         downloader = HLSDownloader(film_folder)
-
+        logger.info(f"Using ffmpeg downloader for {item.name}")
         return await downloader.download(playlist_url, item.name, progress_callback)
 
     async def download_episode(self, series: SeriesInfo, season_number: int,
@@ -930,13 +986,40 @@ class StreamingCommunity:
             series.name,
             f"S{season_number:02d}"
         )
-        downloader = HLSDownloader(season_folder)
-
+        
         # Filename: SeriesName - S01E01 - Episode Title
         filename = f"{series.name} - S{season_number:02d}E{episode.number:02d}"
         if episode.name:
             filename += f" - {episode.name}"
 
+        # Try to use N_m3u8DL-RE if available and preferred
+        if self.prefer_nm3u8 and NM3U8_AVAILABLE:
+            try:
+                # Configure N_m3u8DL-RE
+                config = Nm3u8Config(
+                    binary_path=self.nm3u8_binary_path,
+                    thread_count=self.thread_count,
+                    timeout=self.nm3u8_timeout,
+                    auto_select=True,
+                    concurrent_download=True,
+                    max_speed=self.max_speed,
+                    temp_dir=self.nm3u8_temp_dir,
+                    headers={
+                        "User-Agent": get_user_agent(),
+                        "Referer": self.base_url + "/"
+                    }
+                )
+                
+                downloader = create_downloader(season_folder, prefer_nm3u8=True, config=config)
+                logger.info(f"Using N_m3u8DL-RE downloader for {series.name} S{season_number:02d}E{episode.number:02d}")
+                return await downloader.download(playlist_url, filename, progress_callback)
+                
+            except Exception as e:
+                logger.warning(f"N_m3u8DL-RE failed, falling back to ffmpeg: {e}")
+        
+        # Fallback to ffmpeg/HLSDownloader
+        downloader = HLSDownloader(season_folder)
+        logger.info(f"Using ffmpeg downloader for {series.name} S{season_number:02d}E{episode.number:02d}")
         return await downloader.download(playlist_url, filename, progress_callback)
 
     async def download_season(self, series: SeriesInfo, season_number: int,
