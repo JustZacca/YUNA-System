@@ -616,9 +616,11 @@ download_manager = DownloadManager(max_parallel=2)
 unified_tracker: Optional[UnifiedProgressTracker] = None
 
 
-def get_unified_tracker(bot, chat_id: int) -> UnifiedProgressTracker:
+def get_unified_tracker(bot, chat_id: int, message_id: int = None) -> UnifiedProgressTracker:
     """Get or create the unified tracker instance."""
     global unified_tracker
     if unified_tracker is None:
         unified_tracker = UnifiedProgressTracker(bot, chat_id)
+    if message_id is not None:
+        unified_tracker.message_id = message_id
     return unified_tracker
