@@ -324,8 +324,19 @@ class Miko:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Conta successi e fallimenti
-        successes = sum(1 for r in results if isinstance(r, tuple) and r[1])
-        failures = len(results) - successes
+        successes = 0
+        failures = 0
+        for r in results:
+            if isinstance(r, Exception):
+                logger.error(f"Download exception: {type(r).__name__}: {r}", extra={"classname": self.__class__.__name__})
+                failures += 1
+            elif isinstance(r, tuple) and r[1]:
+                successes += 1
+            else:
+                # Failed download with error message
+                if isinstance(r, tuple) and len(r) >= 3:
+                    logger.error(f"Download failed: Episode {r[0]} - {r[2]}", extra={"classname": self.__class__.__name__})
+                failures += 1
 
         logger.info(f"Download completato. Successi: {successes}, Fallimenti: {failures}", extra={"classname": self.__class__.__name__})
 
