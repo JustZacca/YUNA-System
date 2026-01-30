@@ -65,6 +65,19 @@ Sostituire ffmpeg con N_m3u8DL-RE per download HLS paralleli:
 - Merge automatico in MP4
 - https://github.com/nilaoda/N_m3u8DL-RE
 
+## Miglioramenti Bot Telegram
+
+### Integrazione TMDB nella ricerca
+- [ ] Modificare `_do_sc_search()` per usare TMDB come fonte primaria
+- [ ] Mostrare poster, rating, descrizione nei risultati
+- [ ] Matchare con StreamingCommunity per link download
+- [ ] Aggiungere inline keyboard con info extra (cast, trailer)
+
+### UI migliorata
+- [ ] Poster nelle anteprime risultati (photo message)
+- [ ] Rating IMDB/TMDB visibile
+- [ ] Descrizione trama in italiano
+
 ## Provider Altadefinizione
 
 Da implementare come fallback per StreamingCommunity:
