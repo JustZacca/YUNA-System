@@ -87,6 +87,10 @@ def create_app(lifespan: Optional[Callable] = None) -> FastAPI:
 def register_routes(app: FastAPI) -> None:
     """Register all API routes."""
 
+    # Include routers from routes/
+    from yuna.api.routes import anime
+    app.include_router(anime.router, prefix=API_PREFIX)
+
     # ==================== Health & Info ====================
 
     @app.get(f"{API_PREFIX}/health", response_model=HealthResponse, tags=["System"])

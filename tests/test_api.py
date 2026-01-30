@@ -176,3 +176,189 @@ class TestStatsEndpoint:
 
         # Cleanup
         deps._db = None
+
+
+# ==================== Anime API Tests ====================
+
+@pytest.fixture
+def test_db(tmp_path):
+    """Create a test database with sample data."""
+    from datetime import datetime
+    from yuna.data.database import Database
+    from yuna.api import deps
+
+    db = Database(str(tmp_path / "test.db"))
+
+    # Add sample anime (using correct DB field names)
+    db.add_anime(
+        name="Test Anime",
+        link="/anime/test-anime",
+        last_update=datetime.now(),
+        numero_episodi=12,
+    )
+    db.update_anime_episodes("Test Anime", 5)
+
+    db.add_anime(
+        name="Another Anime",
+        link="/anime/another",
+        last_update=datetime.now(),
+        numero_episodi=10,
+    )
+    db.update_anime_episodes("Another Anime", 10)
+
+    deps._db = db
+    yield db
+    deps._db = None
+
+
+class TestAnimeList:
+    """Tests for anime list endpoint."""
+
+    def test_list_anime_empty(self, client, tmp_path):
+        """Test listing anime when library is empty."""
+        from yuna.data.database import Database
+        from yuna.api import deps
+
+        deps._db = Database(str(tmp_path / "empty.db"))
+
+        response = client.get("/api/anime")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["items"] == []
+        assert data["total"] == 0
+
+        deps._db = None
+
+    def test_list_anime_with_data(self, client, test_db):
+        """Test listing anime with data."""
+        response = client.get("/api/anime")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["total"] == 2
+        assert len(data["items"]) == 2
+
+        names = [a["name"] for a in data["items"]]
+        assert "Test Anime" in names
+        assert "Another Anime" in names
+
+
+class TestAnimeDetail:
+    """Tests for anime detail endpoint."""
+
+    def test_get_anime_found(self, client, test_db):
+        """Test getting anime details."""
+        response = client.get("/api/anime/Test Anime")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["name"] == "Test Anime"
+        assert data["episodes_downloaded"] == 5
+        assert data["episodes_total"] == 12
+        assert len(data["missing_episodes"]) == 7  # 6-12
+
+    def test_get_anime_not_found(self, client, test_db):
+        """Test getting non-existent anime."""
+        response = client.get("/api/anime/NonExistent")
+        assert response.status_code == 404
+
+
+class TestAnimeEpisodes:
+    """Tests for anime episodes endpoint."""
+
+    def test_get_episodes(self, client, test_db):
+        """Test getting episode list."""
+        response = client.get("/api/anime/Test Anime/episodes")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["anime_name"] == "Test Anime"
+        assert data["total"] == 12
+        assert data["downloaded"] == 5
+        assert len(data["missing"]) == 7
+        assert len(data["episodes"]) == 12
+
+    def test_get_episodes_not_found(self, client, test_db):
+        """Test getting episodes for non-existent anime."""
+        response = client.get("/api/anime/NonExistent/episodes")
+        assert response.status_code == 404
+
+
+class TestAnimeAdd:
+    """Tests for adding anime."""
+
+    def test_add_anime_invalid_url(self, client, auth_headers, test_db):
+        """Test adding anime with invalid URL."""
+        response = client.post(
+            "/api/anime",
+            json={"url": "https://example.com/not-animeworld"},
+            headers=auth_headers
+        )
+        assert response.status_code == 400
+        assert "AnimeWorld" in response.json()["detail"]
+
+    def test_add_anime_unauthorized(self, client, test_db):
+        """Test adding anime without auth."""
+        response = client.post(
+            "/api/anime",
+            json={"url": "https://www.animeworld.tv/play/test-anime"}
+        )
+        assert response.status_code == 401
+
+
+class TestAnimeRemove:
+    """Tests for removing anime."""
+
+    def test_remove_anime_success(self, client, auth_headers, test_db):
+        """Test removing anime."""
+        response = client.delete(
+            "/api/anime/Test Anime",
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+        # Verify removed
+        response = client.get("/api/anime/Test Anime")
+        assert response.status_code == 404
+
+    def test_remove_anime_not_found(self, client, auth_headers, test_db):
+        """Test removing non-existent anime."""
+        response = client.delete(
+            "/api/anime/NonExistent",
+            headers=auth_headers
+        )
+        assert response.status_code == 404
+
+    def test_remove_anime_unauthorized(self, client, test_db):
+        """Test removing anime without auth."""
+        response = client.delete("/api/anime/Test Anime")
+        assert response.status_code == 401
+
+
+class TestAnimeDownload:
+    """Tests for download endpoint."""
+
+    def test_download_unauthorized(self, client, test_db):
+        """Test download without auth."""
+        response = client.post(
+            "/api/anime/Test Anime/download",
+            json={}
+        )
+        assert response.status_code == 401
+
+    def test_download_not_found(self, client, auth_headers, test_db):
+        """Test download for non-existent anime."""
+        response = client.post(
+            "/api/anime/NonExistent/download",
+            json={},
+            headers=auth_headers
+        )
+        assert response.status_code == 404
+
+    def test_download_status_no_active(self, client, test_db):
+        """Test getting download status when none active."""
+        response = client.get("/api/anime/Test Anime/download/status")
+        assert response.status_code == 200
+        assert response.json()["active"] is False
