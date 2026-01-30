@@ -6,5 +6,5 @@ Media management system with Telegram bot interface.
 __version__ = "2.0.0"
 __author__ = "Nicholas"
 
-# Import subpackages to make them accessible
-from yuna import bot, data, integrations, providers, services, utils
+# Note: Subpackages are NOT imported here to avoid circular imports.
+# Import them directly: from yuna.services.media_service import Miko

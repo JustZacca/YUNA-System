@@ -186,25 +186,74 @@ class MenuTemplates:
     """Pre-built menu templates for common use cases."""
 
     @staticmethod
-    def main_menu(is_anime_section: bool = True) -> InlineKeyboardMarkup:
-        """Create the main menu keyboard."""
+    def main_menu() -> InlineKeyboardMarkup:
+        """Create the main menu keyboard with categories."""
         builder = KeyboardBuilder()
 
-        # Anime section
-        builder.button(f"{Emoji.SEARCH} Cerca Anime", "menu_search_anime")
-        builder.button(f"{Emoji.LIST} Lista Anime", "menu_list_anime").row()
-        builder.button(f"{Emoji.DOWNLOAD} Scarica Episodi", "menu_download_anime")
-        builder.button(f"{Emoji.REMOVE} Rimuovi Anime", "menu_remove_anime").row()
+        # Category buttons
+        builder.button(f"{Emoji.ANIME} Anime", "submenu_anime")
+        builder.button(f"{Emoji.SERIES} Serie TV", "submenu_series")
+        builder.button(f"{Emoji.FILM} Film", "submenu_film").row()
 
-        # Separator
-        builder.button(f"{'━' * 10}", "noop").row()
+        # Quick actions
+        builder.button(f"{Emoji.DOWNLOAD} Scarica Mancanti", "action_download_all")
+        builder.button(f"{Emoji.REFRESH} Mostra Progresso", "action_show_progress").row()
 
-        # SC section
-        builder.button(f"{Emoji.SEARCH} Cerca Film/Serie", "menu_search_sc")
-        builder.button(f"{Emoji.LIST} Lista Serie", "menu_list_series").row()
-        builder.button(f"{Emoji.LIST} Lista Film", "menu_list_films")
-        builder.button(f"{Emoji.REFRESH} Aggiorna", "menu_refresh").row()
+        # Utility
+        builder.button(f"{Emoji.REFRESH} Aggiorna Libreria", "action_refresh_library").row()
 
+        return builder.build()
+
+    @staticmethod
+    def anime_submenu() -> InlineKeyboardMarkup:
+        """Create anime submenu."""
+        builder = KeyboardBuilder()
+
+        builder.button(f"{Emoji.SEARCH} Cerca Anime", "anime_search")
+        builder.button(f"{Emoji.LIST} Lista Anime", "anime_list").row()
+        builder.button(f"{Emoji.DOWNLOAD} Scarica Episodi", "anime_download")
+        builder.button(f"{Emoji.REMOVE} Rimuovi Anime", "anime_remove").row()
+        builder.button(f"{Emoji.BACK} Menu Principale", "menu_main")
+
+        return builder.build()
+
+    @staticmethod
+    def series_submenu() -> InlineKeyboardMarkup:
+        """Create series submenu."""
+        builder = KeyboardBuilder()
+
+        builder.button(f"{Emoji.SEARCH} Cerca Serie", "series_search")
+        builder.button(f"{Emoji.LIST} Lista Serie", "series_list").row()
+        builder.button(f"{Emoji.DOWNLOAD} Aggiorna Serie", "series_update")
+        builder.button(f"{Emoji.REMOVE} Rimuovi Serie", "series_remove").row()
+        builder.button(f"{Emoji.BACK} Menu Principale", "menu_main")
+
+        return builder.build()
+
+    @staticmethod
+    def film_submenu() -> InlineKeyboardMarkup:
+        """Create film submenu."""
+        builder = KeyboardBuilder()
+
+        builder.button(f"{Emoji.SEARCH} Cerca Film", "film_search")
+        builder.button(f"{Emoji.LIST} Lista Film", "film_list").row()
+        builder.button(f"{Emoji.REMOVE} Rimuovi Film", "film_remove").row()
+        builder.button(f"{Emoji.BACK} Menu Principale", "menu_main")
+
+        return builder.build()
+
+    @staticmethod
+    def back_to_submenu(submenu_type: str) -> InlineKeyboardMarkup:
+        """Create back button to a specific submenu."""
+        builder = KeyboardBuilder()
+        builder.button(f"{Emoji.BACK} Indietro", f"submenu_{submenu_type}")
+        return builder.build()
+
+    @staticmethod
+    def back_to_main() -> InlineKeyboardMarkup:
+        """Create back button to main menu."""
+        builder = KeyboardBuilder()
+        builder.button(f"{Emoji.BACK} Menu Principale", "menu_main")
         return builder.build()
 
     @staticmethod
@@ -416,17 +465,14 @@ class MessageFormatter:
         msg = f"""
 {Emoji.ANIME} *YUNA System - Media Manager*
 
-Benvenuto! Usa i pulsanti qui sotto o i comandi:
+Benvenuto! Seleziona una categoria:
 
-*Anime (AnimeWorld):*
-  /trova\\_anime — Cerca anime
-  /lista\\_anime — Lista anime
-  /download\\_episodi — Scarica episodi
+{Emoji.ANIME} *Anime* — Gestisci anime da AnimeWorld
+{Emoji.SERIES} *Serie TV* — Gestisci serie da StreamingCommunity
+{Emoji.FILM} *Film* — Gestisci film da StreamingCommunity
 
-*Film/Serie (StreamingCommunity):*
-  /cerca\\_sc — Cerca film/serie
-  /lista\\_serie — Lista serie TV
-  /lista\\_film — Lista film
+{Emoji.DOWNLOAD} *Scarica Mancanti* — Scarica tutti i media mancanti
+{Emoji.REFRESH} *Mostra Progresso* — Mostra la barra di progresso
 """
         keyboard = MenuTemplates.main_menu()
         return msg.strip(), keyboard

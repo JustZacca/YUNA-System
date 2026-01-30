@@ -118,8 +118,10 @@ class Kan:
             await update.message.reply_text("Il link non sembra provenire da AnimeWorld o non è formattato correttamente. ⚠️")
         return ConversationHandler.END
 
-    # Function to manage /start command
+    # ==================== MENU SYSTEM ====================
+
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /start command - show main menu."""
         user_id = update.message.from_user.id
         self.logger.info(f"/start from {user_id}")
 
@@ -128,71 +130,48 @@ class Kan:
             await update.message.reply_text(Messages.UNAUTHORIZED)
             return
 
-        self.logger.info("Authorized. Sending welcome message.")
+        # Clear any pending search state
+        context.user_data["awaiting_search"] = None
+        context.user_data["search_context"] = None
 
-        # Build interactive keyboard
-        keyboard = KeyboardBuilder()\
-            .button(f"{Emoji.SEARCH} Cerca Anime", "menu_trova_anime")\
-            .button(f"{Emoji.LIST} Lista Anime", "menu_lista_anime").row()\
-            .button(f"{Emoji.DOWNLOAD} Scarica Episodi", "menu_download")\
-            .button(f"{Emoji.REMOVE} Rimuovi Anime", "menu_rimuovi_anime").row()\
-            .button(f"{Emoji.SEARCH} Cerca Film/Serie", "menu_cerca_sc")\
-            .button(f"{Emoji.LIST} Lista Serie", "menu_lista_serie").row()\
-            .button(f"{Emoji.LIST} Lista Film", "menu_lista_film")\
-            .button(f"{Emoji.REFRESH} Aggiorna", "menu_aggiorna").row()\
-            .build()
-
-        welcome_text = f"""
-{Emoji.ANIME} *YUNA System — Media Manager*
-
-Usa i pulsanti o i comandi:
-
-{Emoji.ANIME} *Anime (AnimeWorld)*
-  /trova\\_anime • /lista\\_anime
-  /download\\_episodi • /rimuovi\\_anime
-
-{Emoji.SERIES} *Film/Serie (SC)*
-  /cerca\\_sc • /lista\\_serie • /lista\\_film
-  /aggiorna\\_serie • /rimuovi\\_serie
-"""
         await update.message.reply_text(
-            welcome_text.strip(),
+            self._main_menu_text(),
             parse_mode="Markdown",
-            reply_markup=keyboard
+            reply_markup=MenuTemplates.main_menu()
         )
 
-    def _back_to_menu_keyboard(self) -> InlineKeyboardMarkup:
-        """Create a simple back to menu keyboard."""
-        return KeyboardBuilder().button(f"{Emoji.BACK} Menu", "menu_back").build()
-
-    def _main_menu_keyboard(self) -> InlineKeyboardMarkup:
-        """Build the main menu keyboard."""
-        return KeyboardBuilder()\
-            .button(f"{Emoji.SEARCH} Cerca Anime", "menu_trova_anime")\
-            .button(f"{Emoji.LIST} Lista Anime", "menu_lista_anime").row()\
-            .button(f"{Emoji.DOWNLOAD} Scarica Episodi", "menu_download")\
-            .button(f"{Emoji.REMOVE} Rimuovi Anime", "menu_rimuovi_anime").row()\
-            .button(f"{Emoji.SEARCH} Cerca Film/Serie", "menu_cerca_sc")\
-            .button(f"{Emoji.LIST} Lista Serie", "menu_lista_serie").row()\
-            .button(f"{Emoji.LIST} Lista Film", "menu_lista_film")\
-            .button(f"{Emoji.REFRESH} Aggiorna", "menu_aggiorna").row()\
-            .build()
-
-    async def _show_main_menu(self, query):
-        """Show the main menu."""
-        welcome_text = f"""
+    def _main_menu_text(self) -> str:
+        """Get main menu text."""
+        return f"""
 {Emoji.ANIME} *YUNA System — Media Manager*
 
-Seleziona un'opzione:
-"""
-        await query.edit_message_text(
-            welcome_text.strip(),
-            parse_mode="Markdown",
-            reply_markup=self._main_menu_keyboard()
-        )
+Seleziona una categoria:
+
+{Emoji.ANIME} *Anime* — AnimeWorld
+{Emoji.SERIES} *Serie TV* — StreamingCommunity
+{Emoji.FILM} *Film* — StreamingCommunity
+""".strip()
+
+    def _back_to_menu_keyboard(self, submenu: str = None) -> InlineKeyboardMarkup:
+        """Create a back button keyboard."""
+        if submenu:
+            return MenuTemplates.back_to_submenu(submenu)
+        return MenuTemplates.back_to_main()
+
+    async def _send_main_menu(self, target, edit: bool = False):
+        """Send or edit the main menu message."""
+        text = self._main_menu_text()
+        keyboard = MenuTemplates.main_menu()
+
+        if edit and hasattr(target, 'edit_message_text'):
+            await target.edit_message_text(text, parse_mode="Markdown", reply_markup=keyboard)
+        else:
+            await target.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
+
+    # ==================== MAIN MENU HANDLER ====================
 
     async def handle_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle main menu button clicks."""
+        """Handle main menu and submenu navigation."""
         query = update.callback_query
         await query.answer()
 
@@ -202,50 +181,274 @@ Seleziona un'opzione:
 
         action = query.data
 
-        # Back to menu
-        if action == "menu_back":
-            await self._show_main_menu(query)
+        # Clear search state when navigating menus
+        context.user_data["awaiting_search"] = None
+
+        # Main menu
+        if action == "menu_main":
+            await query.edit_message_text(
+                self._main_menu_text(),
+                parse_mode="Markdown",
+                reply_markup=MenuTemplates.main_menu()
+            )
             return
 
-        # Map menu actions to handlers
-        if action == "menu_trova_anime":
-            # Set state for waiting anime search
+        # ===== SUBMENUS =====
+        if action == "submenu_anime":
+            await query.edit_message_text(
+                f"{Emoji.ANIME} *Menu Anime*\n\nGestione anime da AnimeWorld:",
+                parse_mode="Markdown",
+                reply_markup=MenuTemplates.anime_submenu()
+            )
+        elif action == "submenu_series":
+            await query.edit_message_text(
+                f"{Emoji.SERIES} *Menu Serie TV*\n\nGestione serie da StreamingCommunity:",
+                parse_mode="Markdown",
+                reply_markup=MenuTemplates.series_submenu()
+            )
+        elif action == "submenu_film":
+            await query.edit_message_text(
+                f"{Emoji.FILM} *Menu Film*\n\nGestione film da StreamingCommunity:",
+                parse_mode="Markdown",
+                reply_markup=MenuTemplates.film_submenu()
+            )
+
+        # ===== QUICK ACTIONS =====
+        elif action == "action_download_all":
+            await self._handle_download_all_missing(query, context)
+        elif action == "action_show_progress":
+            await self._handle_show_progress(query, context)
+        elif action == "action_refresh_library":
+            await query.edit_message_text(
+                f"{Emoji.REFRESH} Aggiornamento libreria in corso...",
+                parse_mode="Markdown",
+                reply_markup=MenuTemplates.back_to_main()
+            )
+            asyncio.create_task(self._update_library_background(context.bot))
+
+    # ==================== ANIME SUBMENU HANDLERS ====================
+
+    async def handle_anime_submenu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle anime submenu actions."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        action = query.data
+
+        if action == "anime_search":
             context.user_data["awaiting_search"] = "anime"
-            keyboard = self._back_to_menu_keyboard()
+            context.user_data["search_context"] = "anime"
             await query.edit_message_text(
                 f"{Emoji.SEARCH} *Cerca Anime*\n\n"
                 f"Scrivi il nome dell'anime da cercare:",
                 parse_mode="Markdown",
-                reply_markup=keyboard
+                reply_markup=MenuTemplates.back_to_submenu("anime")
             )
-        elif action == "menu_lista_anime":
+        elif action == "anime_list":
             await self._show_anime_list(query)
-        elif action == "menu_download":
+        elif action == "anime_download":
             await self._show_download_menu(query)
-        elif action == "menu_rimuovi_anime":
+        elif action == "anime_remove":
             await self._show_removal_menu(query, user_id)
-        elif action == "menu_cerca_sc":
-            # Set state for waiting SC search
-            context.user_data["awaiting_search"] = "sc"
-            keyboard = self._back_to_menu_keyboard()
+
+    # ==================== SERIES SUBMENU HANDLERS ====================
+
+    async def handle_series_submenu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle series submenu actions."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        action = query.data
+
+        if action == "series_search":
+            context.user_data["awaiting_search"] = "series"
+            context.user_data["search_context"] = "series"
             await query.edit_message_text(
-                f"{Emoji.SEARCH} *Cerca Film/Serie*\n\n"
-                f"Scrivi il nome del film o serie da cercare:",
+                f"{Emoji.SEARCH} *Cerca Serie TV*\n\n"
+                f"Scrivi il nome della serie da cercare:",
                 parse_mode="Markdown",
-                reply_markup=keyboard
+                reply_markup=MenuTemplates.back_to_submenu("series")
             )
-        elif action == "menu_lista_serie":
+        elif action == "series_list":
             await self._show_series_list(query)
-        elif action == "menu_lista_film":
-            await self._show_film_list(query)
-        elif action == "menu_aggiorna":
-            keyboard = self._back_to_menu_keyboard()
+        elif action == "series_update":
             await query.edit_message_text(
-                f"{Emoji.REFRESH} Aggiornamento libreria in corso...",
+                f"{Emoji.REFRESH} Controllo nuovi episodi...",
                 parse_mode="Markdown",
-                reply_markup=keyboard
+                reply_markup=MenuTemplates.back_to_submenu("series")
             )
-            asyncio.create_task(self._update_library_background(context.bot))
+            asyncio.create_task(self._check_series_updates(query, context))
+        elif action == "series_remove":
+            await self._show_series_removal_menu(query, user_id)
+
+    # ==================== FILM SUBMENU HANDLERS ====================
+
+    async def handle_film_submenu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle film submenu actions."""
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        action = query.data
+
+        if action == "film_search":
+            context.user_data["awaiting_search"] = "film"
+            context.user_data["search_context"] = "film"
+            await query.edit_message_text(
+                f"{Emoji.SEARCH} *Cerca Film*\n\n"
+                f"Scrivi il nome del film da cercare:",
+                parse_mode="Markdown",
+                reply_markup=MenuTemplates.back_to_submenu("film")
+            )
+        elif action == "film_list":
+            await self._show_film_list(query)
+        elif action == "film_remove":
+            await self._show_film_removal_menu(query, user_id)
+
+    # ==================== QUICK ACTIONS ====================
+
+    async def _handle_download_all_missing(self, query, context):
+        """Download all missing media."""
+        await query.edit_message_text(
+            f"{Emoji.DOWNLOAD} *Scarica Media Mancanti*\n\n"
+            f"Avvio download di tutti i media mancanti...",
+            parse_mode="Markdown",
+            reply_markup=MenuTemplates.back_to_main()
+        )
+        asyncio.create_task(self._download_all_missing_background(query, context))
+
+    async def _download_all_missing_background(self, query, context):
+        """Background task to download all missing media."""
+        try:
+            bot = context.bot
+            chat_id = query.message.chat_id
+
+            # Initialize unified tracker if needed
+            if not self.unified_tracker:
+                msg = await bot.send_message(
+                    chat_id=chat_id,
+                    text=f"{Emoji.DOWNLOAD} *Download Manager*\n\nInizializzazione...",
+                    parse_mode="Markdown"
+                )
+                self.unified_tracker = get_unified_tracker(bot, chat_id, msg.message_id)
+
+            tracker = self.unified_tracker
+
+            # Download missing anime episodes
+            anime_list = self.airi.get_anime()
+            for anime in anime_list:
+                link = anime.get("link")
+                name = anime.get("name")
+                if link:
+                    asyncio.create_task(self._download_anime_episodes_for_name(name, link, bot, tracker))
+
+            # Download pending films
+            pending_films = self.miko_sc.get_pending_films()
+            for film in pending_films:
+                # Create MediaItem-like object for pending films
+                from yuna.providers.streamingcommunity.client import MediaItem
+                item = MediaItem(
+                    id=film.get("media_id", 0),
+                    name=film.get("name"),
+                    slug=film.get("slug", ""),
+                    type="movie"
+                )
+                asyncio.create_task(self._download_film_background(bot, item, tracker))
+
+            # Check series for new episodes
+            await self.miko_sc.check_and_download_new_episodes()
+
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"{Emoji.SUCCESS} Avvio download completato.\nControlla il progresso sopra.",
+                reply_markup=MenuTemplates.back_to_main()
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error downloading all missing: {e}")
+
+    async def _download_anime_episodes_for_name(self, name: str, link: str, bot, tracker):
+        """Download missing episodes for a single anime."""
+        try:
+            # Load the anime
+            await self.miko_instance.loadAnime(link)
+
+            # Get missing episodes
+            missing = await self.miko_instance.getMissingEpisodes()
+            if not missing:
+                self.logger.info(f"No missing episodes for {name}")
+                return
+
+            dl_id = self._next_download_id("anime")
+            tracker.add_download(dl_id, f"{name} ({len(missing)} ep)", "anime")
+
+            async def anime_progress(prog, elapsed=None, size=None):
+                tracker.update_progress(dl_id, prog)
+
+            # Download
+            await self.miko_instance.downloadEpisodes(missing, progress_callback=anime_progress)
+
+            tracker.complete_download(dl_id, success=True)
+            self.logger.info(f"Anime download completed: {name}")
+
+        except Exception as e:
+            self.logger.error(f"Error downloading anime {name}: {e}")
+
+    async def _handle_show_progress(self, query, context):
+        """Show or resend the progress tracker message."""
+        chat_id = query.message.chat_id
+        bot = context.bot
+
+        # Create new progress message
+        msg = await bot.send_message(
+            chat_id=chat_id,
+            text=f"{Emoji.DOWNLOAD} *Download Manager*\n\n"
+                 f"Nessun download attivo.\n\n"
+                 f"Usa 'Scarica Mancanti' per avviare i download.",
+            parse_mode="Markdown"
+        )
+
+        # Update unified tracker
+        self.unified_tracker = get_unified_tracker(bot, chat_id, msg.message_id)
+
+        await query.edit_message_text(
+            f"{Emoji.SUCCESS} Messaggio progresso creato!",
+            parse_mode="Markdown",
+            reply_markup=MenuTemplates.back_to_main()
+        )
+
+    async def _check_series_updates(self, query, context):
+        """Check for series updates in background."""
+        try:
+            updates = await self.miko_sc.check_and_download_new_episodes()
+            if updates:
+                msg = f"{Emoji.SUCCESS} Trovati nuovi episodi per:\n"
+                for series_name, eps in updates.items():
+                    msg += f"\n{Emoji.BULLET} {series_name}: {len(eps)} nuovi"
+            else:
+                msg = f"{Emoji.SUCCESS} Tutte le serie sono aggiornate!"
+
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=msg,
+                parse_mode="Markdown",
+                reply_markup=MenuTemplates.back_to_submenu("series")
+            )
+        except Exception as e:
+            self.logger.error(f"Error checking series: {e}")
+
+    # ==================== SEARCH INPUT HANDLER ====================
 
     async def handle_menu_search_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle search input from menu (not conversation)."""
@@ -259,11 +462,14 @@ Seleziona un'opzione:
 
         search_term = update.message.text.strip()
         context.user_data["awaiting_search"] = None  # Clear state
+        search_context = context.user_data.get("search_context", awaiting)
 
         if awaiting == "anime":
             await self._do_anime_search(update, context, search_term)
-        elif awaiting == "sc":
-            await self._do_sc_search(update, context, search_term)
+        elif awaiting in ("sc", "series"):
+            await self._do_sc_search(update, context, search_term, filter_type="tv")
+        elif awaiting == "film":
+            await self._do_sc_search(update, context, search_term, filter_type="movie")
 
     async def _do_anime_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_term: str):
         """Perform anime search."""
@@ -299,12 +505,22 @@ Seleziona un'opzione:
                 reply_markup=self._back_to_menu_keyboard()
             )
 
-    async def _do_sc_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_term: str):
-        """Perform StreamingCommunity search."""
+    async def _do_sc_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                            search_term: str, filter_type: str = None):
+        """Perform StreamingCommunity search.
+
+        Args:
+            filter_type: "tv" for series only, "movie" for films only, None for all
+        """
         await update.message.reply_text(f"{Emoji.SEARCH} Cerco *{search_term}*...", parse_mode="Markdown")
 
         try:
             results = self.miko_sc.search(search_term)
+
+            # Filter by type if specified
+            if filter_type:
+                results = [r for r in results if r.type == filter_type]
+
             if not results:
                 await update.message.reply_text(
                     f"{Emoji.EMPTY} Nessun risultato per '{search_term}'",
@@ -326,7 +542,14 @@ Seleziona un'opzione:
                 year = f" ({item.year})" if item.year else ""
                 builder.button(f"{emoji} {name}{year}", f"sc_select|{i}").row()
 
-            builder.button(f"{Emoji.BACK} Menu", "menu_back")
+            # Back button based on context
+            search_context = context.user_data.get("search_context", "")
+            if search_context == "series":
+                builder.button(f"{Emoji.BACK} Menu Serie", "submenu_series")
+            elif search_context == "film":
+                builder.button(f"{Emoji.BACK} Menu Film", "submenu_film")
+            else:
+                builder.button(f"{Emoji.BACK} Menu", "menu_main")
 
             await update.message.reply_text(
                 f"{Emoji.SUCCESS} *Risultati per '{search_term}':*",
@@ -348,7 +571,7 @@ Seleziona un'opzione:
             text,
             parse_mode="Markdown",
             disable_web_page_preview=True,
-            reply_markup=self._back_to_menu_keyboard()
+            reply_markup=MenuTemplates.back_to_submenu("anime")
         )
 
     async def _show_download_menu(self, query):
@@ -357,7 +580,7 @@ Seleziona un'opzione:
         if not anime_list:
             await query.edit_message_text(
                 Messages.NO_ANIME,
-                reply_markup=self._back_to_menu_keyboard()
+                reply_markup=MenuTemplates.back_to_submenu("anime")
             )
             return
 
@@ -365,7 +588,7 @@ Seleziona un'opzione:
         for anime in anime_list:
             name = anime.get("name", "?")
             builder.button(f"{Emoji.ANIME} {name}", f"download_anime|{name}").row()
-        builder.button(f"{Emoji.BACK} Menu", "menu_back")
+        builder.button(f"{Emoji.BACK} Menu Anime", "submenu_anime")
 
         await query.edit_message_text(
             f"{Emoji.DOWNLOAD} *Seleziona anime da scaricare:*",
@@ -391,7 +614,7 @@ Seleziona un'opzione:
         await query.edit_message_text(
             text,
             parse_mode="Markdown",
-            reply_markup=self._back_to_menu_keyboard()
+            reply_markup=MenuTemplates.back_to_submenu("series")
         )
 
     async def _show_film_list(self, query):
@@ -401,7 +624,45 @@ Seleziona un'opzione:
         await query.edit_message_text(
             text,
             parse_mode="Markdown",
-            reply_markup=self._back_to_menu_keyboard()
+            reply_markup=MenuTemplates.back_to_submenu("film")
+        )
+
+    async def _show_series_removal_menu(self, query, user_id):
+        """Show series removal menu (from submenu)."""
+        series_list = self.miko_sc.get_library_series()
+        if not series_list:
+            await query.edit_message_text(
+                Messages.NO_SERIES,
+                reply_markup=MenuTemplates.back_to_submenu("series")
+            )
+            return
+
+        self.selected_series_for_removal[user_id] = set()
+        reply_markup = self._build_series_removal_keyboard(user_id)
+        await query.edit_message_text(
+            f"{Emoji.REMOVE} *Seleziona le serie da rimuovere:*\n\n"
+            f"_Clicca per selezionare/deselezionare_",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+    async def _show_film_removal_menu(self, query, user_id):
+        """Show film removal menu (from submenu)."""
+        films_list = self.miko_sc.get_library_films()
+        if not films_list:
+            await query.edit_message_text(
+                Messages.NO_FILMS,
+                reply_markup=MenuTemplates.back_to_submenu("film")
+            )
+            return
+
+        self.selected_films_for_removal[user_id] = set()
+        reply_markup = self._build_film_removal_keyboard(user_id)
+        await query.edit_message_text(
+            f"{Emoji.REMOVE} *Seleziona i film da rimuovere:*\n\n"
+            f"_Clicca per selezionare/deselezionare_",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
         )
 
     async def _update_library_background(self, bot):
@@ -776,7 +1037,7 @@ Seleziona un'opzione:
         builder.button(f"{Emoji.CHECKBOX_OFF} Deseleziona", "removal_deselect_all").row()
         builder.button(f"{Emoji.REMOVE} Conferma", "removal_confirm")
         builder.button(f"{Emoji.CANCEL} Annulla", "removal_cancel").row()
-        builder.button(f"{Emoji.BACK} Menu", "menu_back")
+        builder.button(f"{Emoji.BACK} Menu Anime", "submenu_anime")
 
         return builder.build()
 
@@ -1652,12 +1913,21 @@ Seleziona un'opzione:
         )
         app.add_handler(cerca_sc_conversation)
 
-        # Main menu handler
-        app.add_handler(CallbackQueryHandler(self.handle_main_menu, pattern=r"^menu_"))
+        # Main menu and submenu handlers
+        app.add_handler(CallbackQueryHandler(self.handle_main_menu, pattern=r"^(menu_|submenu_|action_)"))
+
+        # Anime submenu handlers
+        app.add_handler(CallbackQueryHandler(self.handle_anime_submenu, pattern=r"^anime_(search|list|download|remove)$"))
+
+        # Series submenu handlers
+        app.add_handler(CallbackQueryHandler(self.handle_series_submenu, pattern=r"^series_(search|list|update|remove)$"))
+
+        # Film submenu handlers
+        app.add_handler(CallbackQueryHandler(self.handle_film_submenu, pattern=r"^film_(search|list|remove)$"))
 
         # Callback query handlers con pattern specifici (ordine importante: pattern specifici prima)
         app.add_handler(CallbackQueryHandler(self.handle_anime_selection, pattern=r"^download_anime\|"))
-        app.add_handler(CallbackQueryHandler(self.handle_inline_button, pattern=r"^anime_"))
+        app.add_handler(CallbackQueryHandler(self.handle_inline_button, pattern=r"^anime_\d+$"))
         app.add_handler(CallbackQueryHandler(self.handle_search_decision, pattern=r"^(search_more|cancel_search)$"))
         # Handler per menu rimozione anime
         app.add_handler(CallbackQueryHandler(self.handle_removal_toggle, pattern=r"^removal_(toggle\||select_all|deselect_all|cancel|confirm)"))
