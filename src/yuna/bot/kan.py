@@ -491,7 +491,7 @@ Seleziona una categoria:
             for i, anime in enumerate(results[:5]):
                 name = anime.get("name", "?")[:35]
                 builder.button(f"{Emoji.ANIME} {name}", f"anime_{i}").row()
-            builder.button(f"{Emoji.BACK} Menu", "menu_back")
+            builder.button(f"{Emoji.BACK} Menu Anime", "submenu_anime")
 
             await update.message.reply_text(
                 f"{Emoji.SUCCESS} *Risultati per '{search_term}':*",
@@ -1620,7 +1620,7 @@ Seleziona una categoria:
         builder.button(f"{Emoji.CHECKBOX_OFF} Deseleziona", "sc_removal_deselect_all").row()
         builder.button(f"{Emoji.REMOVE} Conferma", "sc_removal_confirm")
         builder.button(f"{Emoji.CANCEL} Annulla", "sc_removal_cancel").row()
-        builder.button(f"{Emoji.BACK} Menu", "menu_back")
+        builder.button(f"{Emoji.BACK} Menu Serie", "submenu_series")
 
         return builder.build()
 
@@ -1751,7 +1751,7 @@ Seleziona una categoria:
         builder.button(f"{Emoji.CHECKBOX_OFF} Deseleziona", "film_removal_deselect_all").row()
         builder.button(f"{Emoji.REMOVE} Conferma", "film_removal_confirm")
         builder.button(f"{Emoji.CANCEL} Annulla", "film_removal_cancel").row()
-        builder.button(f"{Emoji.BACK} Menu", "menu_back")
+        builder.button(f"{Emoji.BACK} Menu Film", "submenu_film")
 
         return builder.build()
 
