@@ -26,8 +26,8 @@ class TestAiriInitialization:
 
     def test_airi_initialization_success(self, mock_env, temp_db, mock_httpx):
         """Verify that Airi initializes correctly with valid environment."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
 
@@ -43,9 +43,9 @@ class TestAiriInitialization:
         monkeypatch.setenv("DESTINATION_FOLDER", "/tmp/test")
 
         # Patch load_dotenv in the airi module to prevent loading .env file
-        with patch("airi.load_dotenv"):
-            with patch("airi.httpx", mock_httpx):
-                from airi import Airi
+        with patch("yuna.providers.animeworld.client.load_dotenv"):
+            with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+                from yuna.providers.animeworld.client import Airi
 
                 with pytest.raises(ValueError, match="TELEGRAM_CHAT_ID non configurato"):
                     Airi(db_path=temp_db)
@@ -56,8 +56,8 @@ class TestAiriInitialization:
         monkeypatch.setenv("TELEGRAM_CHAT_ID", "not_a_number")
         monkeypatch.setenv("DESTINATION_FOLDER", "/tmp/test")
 
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             with pytest.raises(ValueError, match="deve essere un numero intero"):
                 Airi(db_path=temp_db)
@@ -70,17 +70,17 @@ class TestAiriInitialization:
         monkeypatch.delenv("UPDATE_TIME", raising=False)
 
         # Patch load_dotenv in the airi module to prevent loading .env file
-        with patch("airi.load_dotenv"):
-            with patch("airi.httpx", mock_httpx):
-                from airi import Airi
+        with patch("yuna.providers.animeworld.client.load_dotenv"):
+            with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+                from yuna.providers.animeworld.client import Airi
 
                 airi = Airi(db_path=temp_db)
                 assert airi.UPDATE_TIME == 60, "Default UPDATE_TIME should be 60"
 
     def test_airi_database_initialized(self, mock_env, temp_db, mock_httpx):
         """Verify that Airi initializes the database correctly."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
 
@@ -93,8 +93,8 @@ class TestAiriAnimeOperations:
 
     def test_get_anime_empty(self, mock_env, temp_db, mock_httpx):
         """Verify that get_anime returns empty list for new database."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             anime_list = airi.get_anime()
@@ -103,8 +103,8 @@ class TestAiriAnimeOperations:
 
     def test_add_anime_success(self, mock_env, temp_db, mock_httpx):
         """Verify that add_anime adds anime correctly."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -120,8 +120,8 @@ class TestAiriAnimeOperations:
 
     def test_add_anime_extracts_path_from_url(self, mock_env, temp_db, mock_httpx):
         """Verify that add_anime extracts path from full URL."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -137,8 +137,8 @@ class TestAiriAnimeOperations:
 
     def test_add_anime_duplicate_link_skipped(self, mock_env, temp_db, mock_httpx):
         """Verify that adding anime with duplicate link is skipped."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
 
@@ -163,8 +163,8 @@ class TestAiriAnimeOperations:
 
     def test_add_anime_with_datetime_object(self, mock_env, temp_db, mock_httpx):
         """Verify that add_anime accepts datetime object for last_update."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -181,8 +181,8 @@ class TestAiriAnimeOperations:
         """Verify that remove_anime removes from database and disk."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
 
@@ -213,8 +213,8 @@ class TestAiriAnimeOperations:
 
     def test_remove_anime_not_found(self, mock_env, temp_db, mock_httpx):
         """Verify that remove_anime handles non-existent anime."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             success, message = airi.remove_anime("Non Existent")
@@ -226,8 +226,8 @@ class TestAiriAnimeOperations:
         """Verify that remove_anime handles missing folder gracefully."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
 
@@ -250,8 +250,8 @@ class TestAiriUpdateMethods:
 
     def test_update_downloaded_episodes(self, mock_env, temp_db, mock_httpx):
         """Verify that update_downloaded_episodes works correctly."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -268,8 +268,8 @@ class TestAiriUpdateMethods:
 
     def test_update_episodes_number(self, mock_env, temp_db, mock_httpx):
         """Verify that update_episodes_number works correctly."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -286,8 +286,8 @@ class TestAiriUpdateMethods:
 
     def test_update_last_update(self, mock_env, temp_db, mock_httpx):
         """Verify that update_last_update works correctly."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -304,8 +304,8 @@ class TestAiriUpdateMethods:
 
     def test_update_last_update_with_datetime(self, mock_env, temp_db, mock_httpx):
         """Verify that update_last_update accepts datetime object."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -326,8 +326,8 @@ class TestAiriLinkRetrieval:
 
     def test_get_anime_link_exact_match(self, mock_env, temp_db, mock_httpx):
         """Verify that get_anime_link works with exact name."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -342,8 +342,8 @@ class TestAiriLinkRetrieval:
 
     def test_get_anime_link_partial_match(self, mock_env, temp_db, mock_httpx):
         """Verify that get_anime_link works with partial name."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -358,8 +358,8 @@ class TestAiriLinkRetrieval:
 
     def test_get_anime_link_case_insensitive(self, mock_env, temp_db, mock_httpx):
         """Verify that get_anime_link is case insensitive."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -374,8 +374,8 @@ class TestAiriLinkRetrieval:
 
     def test_get_anime_link_not_found(self, mock_env, temp_db, mock_httpx):
         """Verify that get_anime_link returns proper message when not found."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             link = airi.get_anime_link("Non Existent")
@@ -384,8 +384,8 @@ class TestAiriLinkRetrieval:
 
     def test_get_anime_link_strips_whitespace(self, mock_env, temp_db, mock_httpx):
         """Verify that get_anime_link handles whitespace in input."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_anime(
@@ -428,8 +428,8 @@ class TestAiriAutoMigration:
             with open(config_path, "w") as f:
                 json.dump(config_data, f)
 
-            with patch("airi.httpx", mock_httpx):
-                from airi import Airi
+            with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+                from yuna.providers.animeworld.client import Airi
 
                 airi = Airi(db_path=temp_db)
 
@@ -443,8 +443,8 @@ class TestAiriAutoMigration:
 
     def test_no_migration_without_config(self, mock_env, temp_db, mock_httpx):
         """Verify that Airi works fine without config.json."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
 
@@ -458,8 +458,8 @@ class TestAiriDestinationFolder:
 
     def test_get_destination_folder_success(self, mock_env, temp_db, mock_httpx):
         """Verify that get_destination_folder returns correct path."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             folder = airi.get_destination_folder()
@@ -472,8 +472,8 @@ class TestAiriDestinationFolder:
         monkeypatch.setenv("TELEGRAM_CHAT_ID", "123456789")
         monkeypatch.delenv("DESTINATION_FOLDER", raising=False)
 
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.destination_folder = None  # Force None
@@ -487,8 +487,8 @@ class TestAiriTVOperations:
 
     def test_get_tv_empty(self, mock_env, temp_db, mock_httpx):
         """Verify that get_tv returns empty list for new database."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             tv_list = airi.get_tv()
@@ -497,8 +497,8 @@ class TestAiriTVOperations:
 
     def test_add_tv_success(self, mock_env, temp_db, mock_httpx):
         """Verify that add_tv works correctly."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_tv(
@@ -518,8 +518,8 @@ class TestAiriMovieOperations:
 
     def test_get_movies_empty(self, mock_env, temp_db, mock_httpx):
         """Verify that get_movies returns empty list for new database."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             movies_list = airi.get_movies()
@@ -528,8 +528,8 @@ class TestAiriMovieOperations:
 
     def test_add_movie_success(self, mock_env, temp_db, mock_httpx):
         """Verify that add_movie works correctly."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
             airi.add_movie(
@@ -548,8 +548,8 @@ class TestAiriLegacyMethods:
 
     def test_load_or_create_config(self, mock_env, temp_db, mock_httpx):
         """Verify that load_or_create_config returns database data."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
 
@@ -570,8 +570,8 @@ class TestAiriLegacyMethods:
 
     def test_invalidate_config_no_error(self, mock_env, temp_db, mock_httpx):
         """Verify that invalidate_config runs without error."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import Airi
 
             airi = Airi(db_path=temp_db)
 
@@ -584,11 +584,11 @@ class TestAnimeWorldURLFetching:
 
     def test_get_animeworld_url_success(self, mock_httpx, mock_env, temp_db):
         """Verify that AnimeWorld URL is fetched automatically."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import get_animeworld_url, Airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import get_animeworld_url, Airi
 
             # Reset cache
-            import airi
+            from yuna.providers.animeworld import client as airi
             airi._animeworld_url_cache = None
 
             url = get_animeworld_url()
@@ -596,9 +596,9 @@ class TestAnimeWorldURLFetching:
 
     def test_get_animeworld_url_caching(self, mock_httpx, mock_env, temp_db):
         """Verify that AnimeWorld URL is cached."""
-        with patch("airi.httpx", mock_httpx):
-            from airi import get_animeworld_url
-            import airi
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import get_animeworld_url
+            from yuna.providers.animeworld import client as airi
 
             # Reset cache
             airi._animeworld_url_cache = None
@@ -616,14 +616,14 @@ class TestAnimeWorldURLFetching:
 
     def test_get_animeworld_url_fallback(self, monkeypatch, mock_env, temp_db):
         """Verify that fallback URL is used when all requests fail."""
-        import airi
+        from yuna.providers.animeworld import client as airi
         airi._animeworld_url_cache = None
 
         mock_httpx = MagicMock()
         mock_httpx.get.side_effect = Exception("Network error")
 
-        with patch("airi.httpx", mock_httpx):
-            from airi import get_animeworld_url
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            from yuna.providers.animeworld.client import get_animeworld_url
 
             url = get_animeworld_url()
             assert url == "https://www.animeworld.ac", "Should use fallback URL"

@@ -1,22 +1,13 @@
 import os
 import requests
-import logging
 from dotenv import load_dotenv
-from colorama import Fore, Style, init
-from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
+from colorama import init
+
+from yuna.utils.logging import get_logger
 
 init(autoreset=True)
 
-# Configura il logging con il custom formatter
-formatter = ColoredFormatter(
-    fmt="\033[34m%(asctime)s\033[0m - %(levelname)s - %(message)s",  # Make the time blue
-    datefmt="%Y-%m-%d %H:%M:%S"  # Keep the date format
-)
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(handler)
+logger = get_logger(__name__)
 
 class JellyfinClient:
     def __init__(self):

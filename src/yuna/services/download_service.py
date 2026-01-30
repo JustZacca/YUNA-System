@@ -13,18 +13,9 @@ from typing import Optional, Callable, Any, Dict
 from enum import Enum
 from collections import deque
 
-from color_utils import ColoredFormatter
+from yuna.utils.logging import get_logger
 
-# Configure logging
-formatter = ColoredFormatter(
-    fmt="\033[34m%(asctime)s\033[0m - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(handler)
+logger = get_logger(__name__)
 
 
 class DownloadStatus(Enum):

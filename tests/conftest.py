@@ -15,8 +15,10 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add src directory to path for imports
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_project_root, 'src'))
+sys.path.insert(0, _project_root)  # Keep for backward compatibility
 
 
 @pytest.fixture
@@ -247,7 +249,7 @@ def mock_animeworld():
     Yields:
         MagicMock: Mocked animeworld module.
     """
-    with patch("miko.aw") as mock_aw:
+    with patch("yuna.services.media_service.aw") as mock_aw:
         # Mock Anime class
         mock_anime = MagicMock()
         mock_anime.getName.return_value = "Test Anime"
@@ -331,7 +333,7 @@ def mock_httpx():
     Yields:
         MagicMock: Mocked httpx module.
     """
-    with patch("airi.httpx") as mock:
+    with patch("yuna.providers.animeworld.client.httpx") as mock:
         mock_response = MagicMock()
         mock_response.url = "https://www.animeworld.ac"
         mock.get.return_value = mock_response
@@ -375,10 +377,10 @@ def reset_animeworld_cache():
     This ensures tests don't interfere with each other through
     the global cache variable.
     """
-    import airi
-    airi._animeworld_url_cache = None
+    from yuna.providers.animeworld import client as airi_client
+    airi_client._animeworld_url_cache = None
     yield
-    airi._animeworld_url_cache = None
+    airi_client._animeworld_url_cache = None
 
 
 @pytest.fixture(autouse=True)
@@ -401,7 +403,7 @@ def cleanup_default_db(tmp_path, monkeypatch):
     monkeypatch.setenv("DESTINATION_FOLDER", download_folder)
 
     # Reload database module to pick up new env var
-    import database
+    from yuna.data import database
     database.DEFAULT_DB_PATH = db_path
 
     yield
@@ -419,7 +421,7 @@ def mock_requests():
     Yields:
         MagicMock: Mocked requests module.
     """
-    with patch("miko.requests") as mock:
+    with patch("yuna.services.media_service.requests") as mock:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.iter_content.return_value = [b"fake_image_data"]
@@ -481,7 +483,7 @@ def mock_streamingcommunity():
     Yields:
         MagicMock: Mocked StreamingCommunity module components.
     """
-    with patch("streamingcommunity.httpx") as mock_httpx:
+    with patch("yuna.providers.streamingcommunity.client.httpx") as mock_httpx:
         # Mock HTTP client
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -520,7 +522,7 @@ def mock_sc_media_item():
     Returns:
         MediaItem: A sample media item object.
     """
-    from streamingcommunity import MediaItem
+    from yuna.providers.streamingcommunity.client import MediaItem
 
     return MediaItem(
         id=123,
@@ -541,7 +543,7 @@ def mock_sc_series_info():
     Returns:
         SeriesInfo: A sample series info object with seasons.
     """
-    from streamingcommunity import SeriesInfo, Season, Episode
+    from yuna.providers.streamingcommunity.client import SeriesInfo, Season, Episode
 
     season1 = Season(id=1, number=1, name="Season 1", slug="season-1")
     season1.episodes = [
@@ -594,7 +596,7 @@ def mock_miko_sc_database(temp_db, monkeypatch):
     """
     monkeypatch.setenv("DATABASE_PATH", temp_db)
 
-    with patch("miko.Database") as mock_db:
+    with patch("yuna.services.media_service.Database") as mock_db:
         # Create mock database with all required methods
         mock_instance = MagicMock()
         mock_instance.get_all_tv.return_value = []

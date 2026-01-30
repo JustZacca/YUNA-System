@@ -26,11 +26,11 @@ class TestMikoInitialization:
 
     def test_miko_initialization(self, mock_env, temp_db, mock_httpx):
         """Verify that Miko initializes with correct default values."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
@@ -42,11 +42,11 @@ class TestMikoInitialization:
 
     def test_miko_has_download_semaphore(self, mock_env, temp_db, mock_httpx):
         """Verify that Miko has a download semaphore for parallel downloads."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
@@ -59,11 +59,11 @@ class TestNormalizeName:
 
     def test_normalize_name_removes_special_chars(self, mock_env, temp_db, mock_httpx):
         """Verify that normalize_name removes special characters."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
@@ -72,11 +72,11 @@ class TestNormalizeName:
 
     def test_normalize_name_converts_to_lowercase(self, mock_env, temp_db, mock_httpx):
         """Verify that normalize_name converts to lowercase."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
@@ -85,11 +85,11 @@ class TestNormalizeName:
 
     def test_normalize_name_preserves_alphanumeric(self, mock_env, temp_db, mock_httpx):
         """Verify that normalize_name preserves alphanumeric characters."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
@@ -98,11 +98,11 @@ class TestNormalizeName:
 
     def test_normalize_name_handles_spaces(self, mock_env, temp_db, mock_httpx):
         """Verify that normalize_name removes spaces."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
@@ -120,8 +120,8 @@ class TestSetupAnimeFolder:
         """Verify that setupAnimeFolder creates the anime directory."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 # Mock anime object
@@ -129,14 +129,14 @@ class TestSetupAnimeFolder:
                 mock_anime.getName.return_value = "Test Anime"
                 mock_anime.getCover.return_value = "https://example.com/cover.jpg"
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 miko.anime = mock_anime
                 miko.anime_name = "Test Anime"
 
                 # Mock requests for cover download
-                with patch("miko.requests") as mock_requests:
+                with patch("yuna.services.media_service.requests") as mock_requests:
                     mock_response = MagicMock()
                     mock_response.status_code = 200
                     mock_response.iter_content.return_value = [b"fake_image"]
@@ -154,11 +154,11 @@ class TestSetupAnimeFolder:
         self, mock_env, temp_db, mock_httpx
     ):
         """Verify that setupAnimeFolder returns False when no anime is loaded."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 result = await miko.setupAnimeFolder()
@@ -176,14 +176,14 @@ class TestSetupAnimeFolder:
         existing_folder = os.path.join(temp_download_folder, "Existing Anime")
         os.makedirs(existing_folder, exist_ok=True)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 mock_anime = MagicMock()
                 mock_anime.getName.return_value = "Existing Anime"
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 miko.anime = mock_anime
@@ -205,8 +205,8 @@ class TestDownloadEpisodes:
         """Verify that downloadEpisodes downloads episodes with parallel semaphore."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 # Create mock episodes
@@ -224,7 +224,7 @@ class TestDownloadEpisodes:
                 mock_anime.getName.return_value = "Test Anime"
                 mock_anime.getEpisodes.return_value = [mock_ep1, mock_ep2]
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 miko.anime = mock_anime
@@ -242,11 +242,11 @@ class TestDownloadEpisodes:
     @pytest.mark.asyncio
     async def test_download_episodes_no_anime_loaded(self, mock_env, temp_db, mock_httpx):
         """Verify that downloadEpisodes returns False when no anime is loaded."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 result = await miko.downloadEpisodes([1, 2, 3])
@@ -260,8 +260,8 @@ class TestDownloadEpisodes:
         """Verify that download semaphore limits parallel downloads to 3."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 concurrent_downloads = []
@@ -287,7 +287,7 @@ class TestDownloadEpisodes:
                 mock_anime.getName.return_value = "Test Anime"
                 mock_anime.getEpisodes.return_value = mock_episodes
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 miko.anime = mock_anime
@@ -311,8 +311,8 @@ class TestGetMissingEpisodes:
         parent_folder = os.path.dirname(anime_folder_with_episodes)
         monkeypatch.setenv("DESTINATION_FOLDER", parent_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 # Create mock episodes (1-7)
@@ -326,7 +326,7 @@ class TestGetMissingEpisodes:
                 mock_anime.getName.return_value = "Test Anime"
                 mock_anime.getEpisodes.return_value = mock_episodes
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 miko.anime = mock_anime
@@ -344,11 +344,11 @@ class TestGetMissingEpisodes:
     @pytest.mark.asyncio
     async def test_get_missing_episodes_no_anime(self, mock_env, temp_db, mock_httpx):
         """Verify that getMissingEpisodes returns empty list when no anime loaded."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 missing = await miko.getMissingEpisodes()
@@ -362,8 +362,8 @@ class TestGetMissingEpisodes:
         """Verify that getMissingEpisodes handles decimal episode numbers."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 # Create mock episodes with decimal numbers
@@ -377,7 +377,7 @@ class TestGetMissingEpisodes:
                 mock_anime.getName.return_value = "Test Anime"
                 mock_anime.getEpisodes.return_value = mock_episodes
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 miko.anime = mock_anime
@@ -407,11 +407,11 @@ class TestCountAndUpdateEpisodes:
         parent_folder = os.path.dirname(anime_folder_with_episodes)
         monkeypatch.setenv("DESTINATION_FOLDER", parent_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
@@ -424,11 +424,11 @@ class TestCountAndUpdateEpisodes:
         self, mock_env, temp_db, mock_httpx
     ):
         """Verify that count_and_update_episodes returns False for missing folder."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 result = miko.count_and_update_episodes("Non Existent Anime", 0)
@@ -442,11 +442,11 @@ class TestCountAndUpdateEpisodes:
         parent_folder = os.path.dirname(anime_folder_with_episodes)
         monkeypatch.setenv("DESTINATION_FOLDER", parent_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
@@ -466,8 +466,8 @@ class TestLoadAnime:
         """Verify that loadAnime loads anime correctly."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 mock_anime = MagicMock()
@@ -475,11 +475,11 @@ class TestLoadAnime:
                 mock_anime.getCover.return_value = "https://example.com/cover.jpg"
                 mock_aw.Anime.return_value = mock_anime
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
-                with patch("miko.requests") as mock_requests:
+                with patch("yuna.services.media_service.requests") as mock_requests:
                     mock_response = MagicMock()
                     mock_response.iter_content.return_value = [b"image"]
                     mock_response.raise_for_status = MagicMock()
@@ -493,12 +493,12 @@ class TestLoadAnime:
     @pytest.mark.asyncio
     async def test_load_anime_failure(self, mock_env, temp_db, mock_httpx):
         """Verify that loadAnime handles errors gracefully."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
                 mock_aw.Anime.side_effect = Exception("Network error")
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 result = await miko.loadAnime("/play/invalid-anime")
@@ -512,15 +512,15 @@ class TestFindAnime:
 
     def test_find_anime_success(self, mock_env, temp_db, mock_httpx):
         """Verify that findAnime returns search results."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
                 mock_aw.find.return_value = [
                     {"name": "Found Anime 1", "link": "/play/found-1"},
                     {"name": "Found Anime 2", "link": "/play/found-2"},
                 ]
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 results = miko.findAnime("search term")
@@ -531,12 +531,12 @@ class TestFindAnime:
 
     def test_find_anime_no_results(self, mock_env, temp_db, mock_httpx):
         """Verify that findAnime returns empty list when nothing found."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
                 mock_aw.find.return_value = []
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 results = miko.findAnime("nonexistent anime")
@@ -545,12 +545,12 @@ class TestFindAnime:
 
     def test_find_anime_handles_exception(self, mock_env, temp_db, mock_httpx):
         """Verify that findAnime handles exceptions gracefully."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
                 mock_aw.find.side_effect = Exception("Search error")
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 results = miko.findAnime("search term")
@@ -568,8 +568,8 @@ class TestAddAnime:
         """Verify that addAnime adds anime to configuration."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 mock_episode = MagicMock()
@@ -582,11 +582,11 @@ class TestAddAnime:
                 mock_anime.getEpisodes.return_value = [mock_episode]
                 mock_aw.Anime.return_value = mock_anime
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
 
-                with patch("miko.requests") as mock_requests:
+                with patch("yuna.services.media_service.requests") as mock_requests:
                     mock_response = MagicMock()
                     mock_response.iter_content.return_value = [b"image"]
                     mock_response.raise_for_status = MagicMock()
@@ -599,12 +599,12 @@ class TestAddAnime:
     @pytest.mark.asyncio
     async def test_add_anime_failure_load(self, mock_env, temp_db, mock_httpx):
         """Verify that addAnime returns None when loading fails."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
                 mock_aw.Anime.side_effect = Exception("Load error")
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 result = await miko.addAnime("https://animeworld.tv/play/invalid")
@@ -618,8 +618,8 @@ class TestGetEpisodes:
     @pytest.mark.asyncio
     async def test_get_episodes_success(self, mock_env, temp_db, mock_httpx):
         """Verify that getEpisodes returns episode list."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 mock_ep1 = MagicMock()
@@ -631,7 +631,7 @@ class TestGetEpisodes:
                 mock_anime.getName.return_value = "Test Anime"
                 mock_anime.getEpisodes.return_value = [mock_ep1, mock_ep2]
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 miko.anime = mock_anime
@@ -643,11 +643,11 @@ class TestGetEpisodes:
     @pytest.mark.asyncio
     async def test_get_episodes_no_anime(self, mock_env, temp_db, mock_httpx):
         """Verify that getEpisodes returns None when no anime loaded."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 episodes = await miko.getEpisodes()
@@ -665,15 +665,15 @@ class TestSaveAnimeCover:
         """Verify that saveAnimeCover saves the cover image."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 mock_anime = MagicMock()
                 mock_anime.getName.return_value = "Cover Test Anime"
                 mock_anime.getCover.return_value = "https://example.com/cover.jpg"
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 miko.anime = mock_anime
@@ -681,7 +681,7 @@ class TestSaveAnimeCover:
                 miko.anime_folder = os.path.join(temp_download_folder, "Cover Test Anime")
                 os.makedirs(miko.anime_folder, exist_ok=True)
 
-                with patch("miko.requests") as mock_requests:
+                with patch("yuna.services.media_service.requests") as mock_requests:
                     mock_response = MagicMock()
                     mock_response.iter_content.return_value = [b"fake_image_data"]
                     mock_response.raise_for_status = MagicMock()
@@ -696,11 +696,11 @@ class TestSaveAnimeCover:
     @pytest.mark.asyncio
     async def test_save_anime_cover_no_anime(self, mock_env, temp_db, mock_httpx):
         """Verify that saveAnimeCover returns False when no anime loaded."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from miko import Miko
+                from yuna.services.media_service import Miko
 
                 miko = Miko()
                 result = await miko.saveAnimeCover()
@@ -715,11 +715,11 @@ class TestMikoSCInitialization:
 
     def test_miko_sc_initialization(self, mock_env, temp_db, mock_httpx):
         """Verify that MikoSC initializes with correct default values."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
 
                     miko_sc = MikoSC()
 
@@ -731,11 +731,11 @@ class TestMikoSCInitialization:
 
     def test_miko_sc_has_download_semaphore(self, mock_env, temp_db, mock_httpx):
         """Verify that MikoSC has a download semaphore."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
 
                     miko_sc = MikoSC()
 
@@ -744,11 +744,11 @@ class TestMikoSCInitialization:
 
     def test_miko_sc_custom_folders(self, mock_env, temp_db, temp_download_folder, mock_httpx):
         """Verify that MikoSC accepts custom folder paths."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
 
                     movies_folder = os.path.join(temp_download_folder, "films")
                     series_folder = os.path.join(temp_download_folder, "tv")
@@ -767,12 +767,12 @@ class TestMikoSCSearch:
 
     def test_search_stores_results(self, mock_env, temp_db, mock_httpx):
         """Verify that search stores results in search_results."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
-                    from streamingcommunity import MediaItem
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
+                    from yuna.providers.streamingcommunity.client import MediaItem
 
                     miko_sc = MikoSC()
 
@@ -789,12 +789,12 @@ class TestMikoSCSearch:
 
     def test_search_films_filters_movies(self, mock_env, temp_db, mock_httpx):
         """Verify that search_films returns only movies."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
-                    from streamingcommunity import MediaItem
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
+                    from yuna.providers.streamingcommunity.client import MediaItem
 
                     miko_sc = MikoSC()
 
@@ -811,12 +811,12 @@ class TestMikoSCSearch:
 
     def test_search_series_filters_tv(self, mock_env, temp_db, mock_httpx):
         """Verify that search_series returns only TV shows."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
-                    from streamingcommunity import MediaItem
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
+                    from yuna.providers.streamingcommunity.client import MediaItem
 
                     miko_sc = MikoSC()
 
@@ -837,12 +837,12 @@ class TestMikoSCSelection:
 
     def test_select_from_results_valid_index(self, mock_env, temp_db, mock_httpx):
         """Verify that valid index selection works."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
-                    from streamingcommunity import MediaItem
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
+                    from yuna.providers.streamingcommunity.client import MediaItem
 
                     miko_sc = MikoSC()
                     miko_sc.search_results = [
@@ -858,12 +858,12 @@ class TestMikoSCSelection:
 
     def test_select_from_results_invalid_index(self, mock_env, temp_db, mock_httpx):
         """Verify that invalid index returns None."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
-                    from streamingcommunity import MediaItem
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
+                    from yuna.providers.streamingcommunity.client import MediaItem
 
                     miko_sc = MikoSC()
                     miko_sc.search_results = [
@@ -880,11 +880,11 @@ class TestMikoSCLibrary:
 
     def test_add_series_to_library(self, mock_env, temp_db, mock_httpx, mock_sc_media_item, mock_sc_series_info):
         """Verify that series can be added to library."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
 
                     miko_sc = MikoSC()
                     miko_sc.current_item = mock_sc_media_item
@@ -901,11 +901,11 @@ class TestMikoSCLibrary:
 
     def test_add_series_to_library_no_item(self, mock_env, temp_db, mock_httpx):
         """Verify that adding series fails when no item selected."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
 
                     miko_sc = MikoSC()
                     miko_sc.current_item = None
@@ -916,11 +916,11 @@ class TestMikoSCLibrary:
 
     def test_get_library_series(self, mock_env, temp_db, mock_httpx):
         """Verify that library series are retrieved."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
                     from datetime import datetime
 
                     miko_sc = MikoSC()
@@ -941,11 +941,11 @@ class TestMikoSCLibrary:
 
     def test_remove_series(self, mock_env, temp_db, mock_httpx):
         """Verify that series can be removed from library."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
                     from datetime import datetime
 
                     miko_sc = MikoSC()
@@ -969,11 +969,11 @@ class TestMikoSCMissingEpisodes:
 
     def test_get_missing_episodes_no_series(self, mock_env, temp_db, mock_httpx):
         """Verify that missing episodes returns empty for non-existent series."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
 
                     miko_sc = MikoSC()
 
@@ -983,11 +983,11 @@ class TestMikoSCMissingEpisodes:
 
     def test_update_downloaded_episode(self, mock_env, temp_db, mock_httpx):
         """Verify that downloaded episode is tracked correctly."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from miko import MikoSC
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.services.media_service import MikoSC
                     from datetime import datetime
                     import json
 

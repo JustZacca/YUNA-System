@@ -27,7 +27,7 @@ class TestMediaItem:
 
     def test_media_item_creation(self):
         """Verify that MediaItem is created with correct fields."""
-        from streamingcommunity import MediaItem
+        from yuna.providers.streamingcommunity.client import MediaItem
 
         item = MediaItem(
             id=123,
@@ -48,7 +48,7 @@ class TestMediaItem:
 
     def test_media_item_str(self):
         """Verify that MediaItem string representation is correct."""
-        from streamingcommunity import MediaItem
+        from yuna.providers.streamingcommunity.client import MediaItem
 
         item = MediaItem(
             id=123,
@@ -65,7 +65,7 @@ class TestMediaItem:
 
     def test_media_item_default_values(self):
         """Verify that MediaItem has correct default values."""
-        from streamingcommunity import MediaItem
+        from yuna.providers.streamingcommunity.client import MediaItem
 
         item = MediaItem(
             id=1,
@@ -85,7 +85,7 @@ class TestEpisode:
 
     def test_episode_creation(self):
         """Verify that Episode is created correctly."""
-        from streamingcommunity import Episode
+        from yuna.providers.streamingcommunity.client import Episode
 
         episode = Episode(
             id=101,
@@ -102,7 +102,7 @@ class TestEpisode:
 
     def test_episode_str(self):
         """Verify Episode string representation."""
-        from streamingcommunity import Episode
+        from yuna.providers.streamingcommunity.client import Episode
 
         episode = Episode(id=1, number=3, name="Pilot Episode")
         str_repr = str(episode)
@@ -116,7 +116,7 @@ class TestSeason:
 
     def test_season_creation(self):
         """Verify that Season is created correctly."""
-        from streamingcommunity import Season
+        from yuna.providers.streamingcommunity.client import Season
 
         season = Season(
             id=1,
@@ -132,7 +132,7 @@ class TestSeason:
 
     def test_season_str(self):
         """Verify Season string representation."""
-        from streamingcommunity import Season, Episode
+        from yuna.providers.streamingcommunity.client import Season, Episode
 
         season = Season(id=1, number=1, name="Season 1")
         season.episodes = [
@@ -182,7 +182,7 @@ class TestStreamingCommunityClient:
 
     def test_client_initialization(self):
         """Verify that client initializes correctly."""
-        from streamingcommunity import StreamingCommunityClient
+        from yuna.providers.streamingcommunity.client import StreamingCommunityClient
 
         client = StreamingCommunityClient()
 
@@ -191,7 +191,7 @@ class TestStreamingCommunityClient:
 
     def test_client_with_base_url(self):
         """Verify that client accepts custom base URL."""
-        from streamingcommunity import StreamingCommunityClient
+        from yuna.providers.streamingcommunity.client import StreamingCommunityClient
 
         client = StreamingCommunityClient(base_url="https://custom.domain.com")
 
@@ -199,7 +199,7 @@ class TestStreamingCommunityClient:
 
     def test_get_headers(self):
         """Verify that headers are generated correctly."""
-        from streamingcommunity import StreamingCommunityClient
+        from yuna.providers.streamingcommunity.client import StreamingCommunityClient
 
         client = StreamingCommunityClient()
         headers = client._get_headers()
@@ -210,7 +210,7 @@ class TestStreamingCommunityClient:
 
     def test_get_inertia_headers(self):
         """Verify that Inertia headers include X-Inertia."""
-        from streamingcommunity import StreamingCommunityClient
+        from yuna.providers.streamingcommunity.client import StreamingCommunityClient
 
         client = StreamingCommunityClient()
         client._version = "test-version"
@@ -226,7 +226,7 @@ class TestVideoSource:
 
     def test_video_source_initialization(self):
         """Verify that VideoSource initializes correctly."""
-        from streamingcommunity import VideoSource
+        from yuna.providers.streamingcommunity.client import VideoSource
 
         source = VideoSource(
             base_url="https://streamingcommunity.computer",
@@ -244,7 +244,7 @@ class TestVideoSource:
 
     def test_parse_window_vars_extracts_playlist(self):
         """Verify that window variables are parsed correctly."""
-        from streamingcommunity import VideoSource
+        from yuna.providers.streamingcommunity.client import VideoSource
 
         source = VideoSource("https://test.com", 1)
 
@@ -267,18 +267,18 @@ class TestHLSDownloader:
 
     def test_downloader_initialization(self, temp_download_folder):
         """Verify that HLSDownloader initializes correctly."""
-        from streamingcommunity import HLSDownloader
+        from yuna.providers.streamingcommunity.client import HLSDownloader
 
-        with patch("streamingcommunity.subprocess.run"):
+        with patch("yuna.providers.streamingcommunity.client.subprocess.run"):
             downloader = HLSDownloader(temp_download_folder)
 
         assert downloader.output_folder == temp_download_folder
 
     def test_sanitize_filename(self, temp_download_folder):
         """Verify that filenames are sanitized correctly."""
-        from streamingcommunity import HLSDownloader
+        from yuna.providers.streamingcommunity.client import HLSDownloader
 
-        with patch("streamingcommunity.subprocess.run"):
+        with patch("yuna.providers.streamingcommunity.client.subprocess.run"):
             downloader = HLSDownloader(temp_download_folder)
 
         # Test various problematic characters
@@ -289,9 +289,9 @@ class TestHLSDownloader:
 
     def test_sanitize_filename_preserves_normal_chars(self, temp_download_folder):
         """Verify that normal characters are preserved."""
-        from streamingcommunity import HLSDownloader
+        from yuna.providers.streamingcommunity.client import HLSDownloader
 
-        with patch("streamingcommunity.subprocess.run"):
+        with patch("yuna.providers.streamingcommunity.client.subprocess.run"):
             downloader = HLSDownloader(temp_download_folder)
 
         result = downloader._sanitize_filename("Normal Movie Title 2024")
@@ -300,9 +300,9 @@ class TestHLSDownloader:
     @pytest.mark.asyncio
     async def test_download_creates_directory(self, temp_download_folder):
         """Verify that download creates output directory."""
-        from streamingcommunity import HLSDownloader
+        from yuna.providers.streamingcommunity.client import HLSDownloader
 
-        with patch("streamingcommunity.subprocess.run"):
+        with patch("yuna.providers.streamingcommunity.client.subprocess.run"):
             downloader = HLSDownloader(os.path.join(temp_download_folder, "newdir"))
 
         with patch("asyncio.create_subprocess_exec") as mock_exec:
@@ -330,9 +330,9 @@ class TestStreamingCommunityManager:
 
     def test_manager_initialization(self, mock_env, temp_db, mock_httpx):
         """Verify that manager initializes correctly."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("streamingcommunity.httpx"):
-                from streamingcommunity import StreamingCommunity
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.providers.streamingcommunity.client.httpx"):
+                from yuna.providers.streamingcommunity.client import StreamingCommunity
 
                 manager = StreamingCommunity(
                     movies_folder="/tmp/movies",
@@ -345,9 +345,9 @@ class TestStreamingCommunityManager:
 
     def test_search_films_filters_correctly(self, mock_env, temp_db, mock_httpx):
         """Verify that search_films returns only movies."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("streamingcommunity.httpx"):
-                from streamingcommunity import StreamingCommunity, MediaItem
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.providers.streamingcommunity.client.httpx"):
+                from yuna.providers.streamingcommunity.client import StreamingCommunity, MediaItem
 
                 manager = StreamingCommunity()
 
@@ -366,9 +366,9 @@ class TestStreamingCommunityManager:
 
     def test_search_series_filters_correctly(self, mock_env, temp_db, mock_httpx):
         """Verify that search_series returns only TV shows."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("streamingcommunity.httpx"):
-                from streamingcommunity import StreamingCommunity, MediaItem
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.providers.streamingcommunity.client.httpx"):
+                from yuna.providers.streamingcommunity.client import StreamingCommunity, MediaItem
 
                 manager = StreamingCommunity()
 
@@ -390,7 +390,7 @@ class TestDatabaseTVOperations:
 
     def test_add_tv_with_sc_fields(self, temp_db, sample_sc_series_data):
         """Verify that TV shows can be added with StreamingCommunity fields."""
-        from database import Database
+        from yuna.data.database import Database
 
         db = Database(temp_db)
         last_update = datetime.strptime(
@@ -421,7 +421,7 @@ class TestDatabaseTVOperations:
 
     def test_update_tv_seasons_data(self, temp_db, sample_sc_series_data):
         """Verify that seasons_data can be updated."""
-        from database import Database
+        from yuna.data.database import Database
         import json
 
         db = Database(temp_db)
@@ -457,7 +457,7 @@ class TestDatabaseMovieOperations:
 
     def test_add_movie_with_sc_fields(self, temp_db, sample_sc_movie_data):
         """Verify that movies can be added with StreamingCommunity fields."""
-        from database import Database
+        from yuna.data.database import Database
 
         db = Database(temp_db)
         last_update = datetime.strptime(
@@ -486,7 +486,7 @@ class TestDatabaseMovieOperations:
 
     def test_get_pending_movies(self, temp_db):
         """Verify that pending movies (not downloaded) are returned."""
-        from database import Database
+        from yuna.data.database import Database
 
         db = Database(temp_db)
         now = datetime.now()
@@ -505,7 +505,7 @@ class TestDatabaseMovieOperations:
 
     def test_update_movie_downloaded(self, temp_db):
         """Verify that movie download status can be updated."""
-        from database import Database
+        from yuna.data.database import Database
 
         db = Database(temp_db)
         now = datetime.now()

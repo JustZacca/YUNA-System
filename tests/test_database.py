@@ -20,9 +20,10 @@ from unittest.mock import patch
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_project_root, 'src'))
 
-from database import Database, DEFAULT_DB_PATH
+from yuna.data.database import Database, DEFAULT_DB_PATH
 
 
 class TestDatabaseInitialization:

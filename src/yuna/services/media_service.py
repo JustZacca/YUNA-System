@@ -1,37 +1,24 @@
 # -*- coding: utf-8 -*-
+"""
+Media service for YUNA System.
+Contains Miko (anime) and MikoSC (streaming community) services.
+"""
+
 import animeworld as aw
 import os
-import logging
-import asyncio
-from colorama import Fore, Style, init
-from airi import Airi
 import re
-from color_utils import ColoredFormatter  # Importa la classe ColoredFormatter dal file color_utils
-from colorama import init
-from datetime import datetime, timezone
+import asyncio
 import requests
-import JellyfinClient
+from datetime import datetime, timezone
+from colorama import Fore, Style, init
+
+from yuna.utils.logging import get_logger
+from yuna.providers.animeworld.client import Airi
+from yuna.integrations.jellyfin import JellyfinClient
+
 init(autoreset=True)
 
-
-# Configura il logging con il custom formatter
-class ColoredFormatterWithClass(ColoredFormatter):
-    def format(self, record):
-        # Coloriamo il nome della classe in base al livello di log
-        classname_color = Fore.CYAN  # Puoi scegliere qualsiasi colore
-        class_name = f"{classname_color}{record.classname}{Style.RESET_ALL}"
-        log_message = super().format(record)
-        return log_message.replace('%(classname)s', class_name)
-
-formatter = ColoredFormatter(
-    fmt="\033[34m%(asctime)s\033[0m - %(levelname)s - %(message)s",  # Make the time blue
-    datefmt="%Y-%m-%d %H:%M:%S"  # Keep the date format
-)
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(handler)
+logger = get_logger(__name__)
 
 class Miko:
     def __init__(self):
@@ -403,8 +390,8 @@ class Miko:
 
 # ==================== MIKO SC - StreamingCommunity Extension ====================
 
-from streamingcommunity import StreamingCommunity, MediaItem, SeriesInfo, Episode
-from database import Database
+from yuna.providers.streamingcommunity.client import StreamingCommunity, MediaItem, SeriesInfo, Episode
+from yuna.data.database import Database
 import json
 
 

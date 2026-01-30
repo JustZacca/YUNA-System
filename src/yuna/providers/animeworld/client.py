@@ -1,31 +1,19 @@
 from dotenv import load_dotenv
 import os
-import logging
 import shutil
-from colorama import Fore, Style, init
-# Importa la classe ColoredFormatter dal file color_utils
-from color_utils import ColoredFormatter
-from colorama import init
 import re
 from urllib.parse import urlparse
 from datetime import datetime
-import httpx
 
-from database import Database
+import httpx
+from colorama import Fore, Style, init
+
+from yuna.utils.logging import get_logger
+from yuna.data.database import Database
 
 init(autoreset=True)
 
-# Configura il logging con il custom formatter
-formatter = ColoredFormatter(
-    # Make the time blue
-    fmt="\033[34m%(asctime)s\033[0m - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"  # Keep the date format
-)
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(handler)
+logger = get_logger(__name__)
 
 # Cache per l'URL di AnimeWorld
 _animeworld_url_cache = None

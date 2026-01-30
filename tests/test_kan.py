@@ -24,11 +24,11 @@ class TestKanInitialization:
 
     def test_kan_initialization(self, mock_env, temp_db, mock_httpx):
         """Verify that Kan initializes correctly with required attributes."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -43,11 +43,11 @@ class TestKanInitialization:
 
     def test_kan_has_miko_instance(self, mock_env, temp_db, mock_httpx):
         """Verify that Kan has a Miko instance for anime operations."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -55,11 +55,11 @@ class TestKanInitialization:
 
     def test_kan_has_logger(self, mock_env, temp_db, mock_httpx):
         """Verify that Kan has a configured logger."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -71,11 +71,11 @@ class TestBuildRemovalKeyboard:
 
     def test_build_removal_keyboard_empty_list(self, mock_env, temp_db, mock_httpx):
         """Verify that keyboard is built correctly with empty anime list."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
                 user_id = 123456789
@@ -88,11 +88,11 @@ class TestBuildRemovalKeyboard:
 
     def test_build_removal_keyboard_with_anime(self, mock_env, temp_db, mock_httpx):
         """Verify that keyboard includes anime buttons."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
                 user_id = 123456789
@@ -119,11 +119,11 @@ class TestBuildRemovalKeyboard:
         self, mock_env, temp_db, mock_httpx
     ):
         """Verify that keyboard shows correct selection checkbox."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
                 user_id = 123456789
@@ -152,11 +152,11 @@ class TestBuildRemovalKeyboard:
         self, mock_env, temp_db, mock_httpx
     ):
         """Verify that keyboard has select all/deselect and confirm/cancel buttons."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
                 user_id = 123456789
@@ -180,11 +180,11 @@ class TestAuthorizationChecks:
     @pytest.mark.asyncio
     async def test_start_unauthorized_user(self, mock_env, temp_db, mock_httpx):
         """Verify that unauthorized users are rejected from /start."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -207,11 +207,11 @@ class TestAuthorizationChecks:
     @pytest.mark.asyncio
     async def test_start_authorized_user(self, mock_env, temp_db, mock_httpx):
         """Verify that authorized users receive welcome message."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -236,11 +236,11 @@ class TestAuthorizationChecks:
     @pytest.mark.asyncio
     async def test_lista_anime_unauthorized(self, mock_env, temp_db, mock_httpx):
         """Verify that unauthorized users cannot list anime."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -260,11 +260,11 @@ class TestAuthorizationChecks:
     @pytest.mark.asyncio
     async def test_aggiungi_anime_unauthorized(self, mock_env, temp_db, mock_httpx):
         """Verify that unauthorized users cannot add anime."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
                 from telegram.ext import ConversationHandler
 
                 kan = Kan()
@@ -286,11 +286,11 @@ class TestAuthorizationChecks:
     @pytest.mark.asyncio
     async def test_stop_bot_unauthorized(self, mock_env, temp_db, mock_httpx):
         """Verify that unauthorized users cannot stop the bot."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -314,11 +314,11 @@ class TestErrorHandler:
     @pytest.mark.asyncio
     async def test_error_handler_does_not_crash(self, mock_env, temp_db, mock_httpx):
         """Verify that error_handler handles errors without crashing."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -340,11 +340,11 @@ class TestErrorHandler:
     @pytest.mark.asyncio
     async def test_error_handler_notifies_user(self, mock_env, temp_db, mock_httpx):
         """Verify that error_handler sends notification to authorized user."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -366,11 +366,11 @@ class TestErrorHandler:
         self, mock_env, temp_db, mock_httpx
     ):
         """Verify that error_handler handles notification failure gracefully."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -402,8 +402,8 @@ class TestReceiveLink:
         """Verify that valid AnimeWorld links are processed."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
                 mock_episode = MagicMock()
@@ -416,7 +416,7 @@ class TestReceiveLink:
                 mock_anime.getEpisodes.return_value = [mock_episode]
                 mock_aw.Anime.return_value = mock_anime
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
                 from telegram.ext import ConversationHandler
 
                 kan = Kan()
@@ -428,7 +428,7 @@ class TestReceiveLink:
 
                 context = MagicMock()
 
-                with patch("miko.requests") as mock_requests:
+                with patch("yuna.services.media_service.requests") as mock_requests:
                     mock_response = MagicMock()
                     mock_response.iter_content.return_value = [b"image"]
                     mock_response.raise_for_status = MagicMock()
@@ -441,11 +441,11 @@ class TestReceiveLink:
     @pytest.mark.asyncio
     async def test_receive_link_invalid_url(self, mock_env, temp_db, mock_httpx):
         """Verify that invalid URLs are rejected."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
                 from telegram.ext import ConversationHandler
 
                 kan = Kan()
@@ -471,11 +471,11 @@ class TestListaAnime:
     @pytest.mark.asyncio
     async def test_lista_anime_empty(self, mock_env, temp_db, mock_httpx):
         """Verify that empty anime list shows appropriate message."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -495,11 +495,11 @@ class TestListaAnime:
     @pytest.mark.asyncio
     async def test_lista_anime_with_data(self, mock_env, temp_db, mock_httpx):
         """Verify that anime list is displayed correctly."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -531,11 +531,11 @@ class TestCancelHandler:
     @pytest.mark.asyncio
     async def test_cancel_ends_conversation(self, mock_env, temp_db, mock_httpx):
         """Verify that cancel returns ConversationHandler.END."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
                 from telegram.ext import ConversationHandler
 
                 kan = Kan()
@@ -558,11 +558,11 @@ class TestRimuoviAnime:
     @pytest.mark.asyncio
     async def test_rimuovi_anime_unauthorized(self, mock_env, temp_db, mock_httpx):
         """Verify that unauthorized users cannot remove anime."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -582,11 +582,11 @@ class TestRimuoviAnime:
     @pytest.mark.asyncio
     async def test_rimuovi_anime_empty_list(self, mock_env, temp_db, mock_httpx):
         """Verify that empty anime list shows appropriate message."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -606,11 +606,11 @@ class TestRimuoviAnime:
     @pytest.mark.asyncio
     async def test_rimuovi_anime_shows_keyboard(self, mock_env, temp_db, mock_httpx):
         """Verify that removal menu shows keyboard with anime."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -642,11 +642,11 @@ class TestKeyboardStopBot:
 
     def test_keyboard_stop_bot_sends_signal(self, mock_env, temp_db, mock_httpx):
         """Verify that keyboard_stop_bot sends SIGINT signal."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -667,11 +667,11 @@ class TestDownloadTask:
     @pytest.mark.asyncio
     async def test_download_task_empty_list(self, mock_env, temp_db, mock_httpx):
         """Verify that download_task returns False for empty list."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
                 kan.missing_episodes_list = []
@@ -687,11 +687,11 @@ class TestDownloadTask:
         """Verify that download_task calls miko download."""
         monkeypatch.setenv("DESTINATION_FOLDER", temp_download_folder)
 
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
                 kan.missing_episodes_list = [1, 2, 3]
@@ -711,11 +711,11 @@ class TestHandleRemovalToggle:
         self, mock_env, temp_db, mock_httpx
     ):
         """Verify that toggling selects/deselects anime."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -748,11 +748,11 @@ class TestHandleRemovalToggle:
     @pytest.mark.asyncio
     async def test_handle_removal_cancel(self, mock_env, temp_db, mock_httpx):
         """Verify that cancel clears selection and shows message."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -781,11 +781,11 @@ class TestAggiornaLibreria:
     @pytest.mark.asyncio
     async def test_aggiorna_libreria_unauthorized(self, mock_env, temp_db, mock_httpx):
         """Verify that unauthorized users cannot update library."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -805,11 +805,11 @@ class TestAggiornaLibreria:
     @pytest.mark.asyncio
     async def test_aggiorna_libreria_triggers_job(self, mock_env, temp_db, mock_httpx):
         """Verify that aggiorna_libreria triggers the update job."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
 
-                from kan import Kan
+                from yuna.bot.kan import Kan
 
                 kan = Kan()
 
@@ -841,42 +841,42 @@ class TestKanSCInitialization:
 
     def test_kan_has_miko_sc_instance(self, mock_env, temp_db, mock_httpx):
         """Verify that Kan has a MikoSC instance."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
                     # Must patch Database before Airi imports it
-                    from database import Database
+                    from yuna.data.database import Database
                     with patch.object(Database, "_init_database", return_value=None):
                         with patch.object(Database, "get_all_anime", return_value=[]):
-                            from kan import Kan
+                            from yuna.bot.kan import Kan
                             kan = Kan()
                             assert kan.miko_sc is not None
 
     def test_kan_has_sc_search_results_dict(self, mock_env, temp_db, mock_httpx):
         """Verify that Kan has SC search results dictionary."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from database import Database
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.data.database import Database
                     with patch.object(Database, "_init_database", return_value=None):
                         with patch.object(Database, "get_all_anime", return_value=[]):
-                            from kan import Kan
+                            from yuna.bot.kan import Kan
                             kan = Kan()
                             assert kan.sc_search_results == {}
                             assert kan.sc_current_series == {}
 
     def test_kan_has_sc_conversation_states(self, mock_env, temp_db, mock_httpx):
         """Verify that Kan has SC conversation states."""
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    from database import Database
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    from yuna.data.database import Database
                     with patch.object(Database, "_init_database", return_value=None):
                         with patch.object(Database, "get_all_anime", return_value=[]):
-                            from kan import Kan
+                            from yuna.bot.kan import Kan
                             kan = Kan()
                             assert hasattr(kan, "SC_SEARCH")
                             assert hasattr(kan, "SC_SELECT_SEASON")
@@ -889,13 +889,13 @@ class TestCercaSC:
     async def test_cerca_sc_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that unauthorized users cannot search SC."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -916,13 +916,13 @@ class TestCercaSC:
     async def test_cerca_sc_authorized_prompts_search(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that authorized users get search prompt."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -948,13 +948,13 @@ class TestReceiveSCSearch:
     async def test_receive_sc_search_no_results(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that no results message is shown."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -979,14 +979,14 @@ class TestReceiveSCSearch:
     async def test_receive_sc_search_with_results(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that search results show keyboard."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
-                        from streamingcommunity import MediaItem
+                        from yuna.bot.kan import Kan
+                        from yuna.providers.streamingcommunity.client import MediaItem
                         from telegram.ext import ConversationHandler
 
                         kan = Kan()
@@ -1026,13 +1026,13 @@ class TestListaSerie:
     async def test_lista_serie_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that unauthorized users cannot list series."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -1053,13 +1053,13 @@ class TestListaSerie:
     async def test_lista_serie_empty(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that empty series list shows appropriate message."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -1081,13 +1081,13 @@ class TestListaSerie:
     async def test_lista_serie_with_data(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that series list is displayed correctly."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -1118,13 +1118,13 @@ class TestListaFilm:
     async def test_lista_film_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that unauthorized users cannot list films."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -1145,13 +1145,13 @@ class TestListaFilm:
     async def test_lista_film_empty(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that empty film list shows appropriate message."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -1177,13 +1177,13 @@ class TestRimuoviSerie:
     async def test_rimuovi_serie_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that unauthorized users cannot remove series."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -1204,13 +1204,13 @@ class TestRimuoviSerie:
     async def test_rimuovi_serie_empty_list(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that empty series list shows message."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -1235,13 +1235,13 @@ class TestBuildSeriesRemovalKeyboard:
     def test_build_series_removal_keyboard_with_series(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that keyboard includes series buttons."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
                         user_id = kan.AUTHORIZED_USER_ID
@@ -1262,13 +1262,13 @@ class TestBuildSeriesRemovalKeyboard:
     def test_build_series_removal_keyboard_has_action_buttons(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify keyboard has action buttons."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
                         user_id = kan.AUTHORIZED_USER_ID
@@ -1294,13 +1294,13 @@ class TestAggiornaSerie:
     async def test_aggiorna_serie_unauthorized(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that unauthorized users cannot update series."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 
@@ -1321,13 +1321,13 @@ class TestAggiornaSerie:
     async def test_aggiorna_serie_no_updates(self, mock_env, temp_db, mock_httpx, monkeypatch):
         """Verify that message is shown when no updates available."""
         monkeypatch.setenv("DATABASE_PATH", temp_db)
-        with patch("airi.httpx", mock_httpx):
-            with patch("miko.aw") as mock_aw:
+        with patch("yuna.providers.animeworld.client.httpx", mock_httpx):
+            with patch("yuna.services.media_service.aw") as mock_aw:
                 mock_aw.SES = MagicMock()
-                with patch("streamingcommunity.httpx"):
-                    with patch("miko.Database") as mock_db:
+                with patch("yuna.providers.streamingcommunity.client.httpx"):
+                    with patch("yuna.services.media_service.Database") as mock_db:
                         mock_db.return_value = MagicMock()
-                        from kan import Kan
+                        from yuna.bot.kan import Kan
 
                         kan = Kan()
 

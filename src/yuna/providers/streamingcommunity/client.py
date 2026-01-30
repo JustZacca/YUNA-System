@@ -26,18 +26,9 @@ except ImportError:
     def get_user_agent():
         return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-from color_utils import ColoredFormatter
+from yuna.utils.logging import get_logger
 
-# Configure logging
-formatter = ColoredFormatter(
-    fmt="\033[34m%(asctime)s\033[0m - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(handler)
+logger = get_logger(__name__)
 
 
 # ==================== DATA CLASSES ====================

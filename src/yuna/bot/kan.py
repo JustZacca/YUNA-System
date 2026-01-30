@@ -1,31 +1,34 @@
+"""
+KAN - Telegram Bot for YUNA System.
+Handles user interactions for anime and media management.
+"""
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackQueryHandler
-import miko
-from miko import MikoSC
-from airi import Airi
-from download_manager import download_manager, TelegramProgress, get_unified_tracker, UnifiedProgressTracker
-from telegram_ui import Emoji, Messages, KeyboardBuilder, MenuTemplates, MessageFormatter
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler,
+    filters, ConversationHandler, ContextTypes, CallbackQueryHandler
+)
 import os
-import logging
-from color_utils import ColoredFormatter
 import signal
 import asyncio
 import datetime
 from dateutil import parser
 from colorama import init
 
+from yuna.utils.logging import get_logger
+from yuna.services.media_service import Miko, MikoSC
+from yuna.providers.animeworld.client import Airi
+from yuna.services.download_service import (
+    download_manager, TelegramProgress, get_unified_tracker, UnifiedProgressTracker
+)
+from yuna.bot.ui.components import (
+    Emoji, Messages, KeyboardBuilder, MenuTemplates, MessageFormatter
+)
+
 class Kan:
     def __init__(self):
         # Configure logging
-        formatter = ColoredFormatter(
-            fmt="\033[34m%(asctime)s\033[0m - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
-        handler = logging.StreamHandler()
-        handler.setFormatter(formatter)
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
-        self.logger.addHandler(handler)
+        self.logger = get_logger(__name__)
 
         # Initialize colorama
         init(autoreset=True)
@@ -41,7 +44,7 @@ class Kan:
         # Anime ID map for inline buttons
         self.anime_id_map = {}
         self.anime_link = None
-        self.miko_instance = miko.Miko()
+        self.miko_instance = Miko()
         self.missing_episodes_list = []
 
         # Stato per menu rimozione anime
