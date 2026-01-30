@@ -51,26 +51,90 @@ class Nm3u8ProgressParser:
         self.progress = 0.0
         
     def parse_line(self, line: str) -> Optional[float]:
-        """
-        Parse progress line from N_m3u8DL-RE.
-        
-        Args:
-            line: Output line from N_m3u8DL-RE
-            
-        Returns:
-            Progress 0.0-1.0 if parseable, None otherwise
-        """
+        """Parse progress line from N_m3u8DL-RE."""
         line = line.strip()
         
-        # N_m3u8DL-RE typically shows progress like:
-        # "[████████████████████████████████████████] 100.00% (100/100) 15.2MB/15.2MB 2.5MB/s"
-        # "[████████████──────────────────────────────] 40.00% (40/100) 6.1MB/15.2MB 1.8MB/s"
-        
-        # Parse percentage from progress bar
-        percent_match = re.search(r'\[█*░*\]\s+([\d.]+)%', line)
-        if percent_match:
-            self.progress = float(percent_match.group(1)) / 100
+        # Pattern 1: Main progress bar format
+        # [████████████████████████████████████] 100.00% (100/100) 10.2 MB/10.2 MB/s ETA: 0:00:00
+        pattern = r'\[(█░+░+]+)\s+(\d+\d+)%\s+]\s+(\d+\d+)%\s+]'
+        match = pattern.match(r'\[(.*?)(\d+\.\d+)%\s+]?(\d+\d+)%\s+]')
+        if match:
+            self.progress = float(match.group(1)) / 100
+            
+        # Pattern 2: Percentage only
+        perc_match = re.search(r'(\d+\.\d+)%\s+/\d+\d+', line)
+        if perc_match:
+            current = float(perc_match.group(1))
+            speed_match = re.search(r'(\d+\d+) MB/s', line)
+            speed_str = speed_match.group(1) if speed_match else ""
+            size_match = re.search(r'(\d+\d+) MB/\d+\d+\s*\s+\d+)', line)
+            if size_match:
+                current_mb = float(size_match.group(1))
+                self.size = f"{current_mb:.1f} MB"
+                total_mb = float(size_match.group(2))
+                self.progress = current_mb / total_mb if total_mb > 0 else 0
+            self.speed = speed_str
             return self.progress
+                
+        # Pattern 3: Compressed format (common in N_m3u8DL-RE)
+        # [████████████████████████████████] 100.00% (100/100) 10.2 MB/s ETA: 00:00
+        # Pattern 4: Advanced multi-format
+        # [\████████████████████████████] 99.75% (40/40 MB/3.8 MB/s ETA: 00:07:15)
+        # [████████████████████████] 99.75% (40/40 MB/3.8 MB/s ETA: 00:07:15)
+        pattern4a = r'\[(█░+░+]+)\s+(\d+\d+)%\s+\]\s+(\d+\d+)\]\s+(\d+\d+]\s+(\d+\d+)\s+(\d+\d+)]\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)]+\s+(\d+)]+(\d+)\s+\d+)\s+(\d+\d+)\s+(\d+\d+]\s+(\d+\d+)\s+(\d+\d+]\s+(\d+)]+(\d+\d+)]+(\d+\d+)\s+(\d+)] 0 Downloading...    η)
+        pattern4a = re.compile(r'\[(█░+░+]+(\d+\d+)%\s+]\s+(\d+\d+)%\s+(\d+\d+)\s+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+)]+(\d+)\s+(\d+)\s+(\d+\d+)\s+(\d+)]+(\d+)]+(\d+)]+(\d+)]0')
+        
+        match = pattern4a.search(line)
+        if match:
+            # Estrai numeri tra parentesi e parentesi
+            progress = float(match.group(1)) / 100
+            
+        # Pattern 5: Speed and size pattern
+        speed_size_match = re.search(r'(\d+\d+)\s*/s', line)
+        size_match = re.search(r'(\d+\d+)\s*/(\d+ MB/\d+\d+\s)', line)
+        if speed_size_match:
+            self.speed = speed_size_match.group(1)  # MB/s
+            current_mb = float(speed_size_match.group(1))
+            size_match = re.search(r'(\d+\d+)\s*/(\d+ MB/\d+\s)', line)
+            total_mb = float(size_match.group(2))
+            self.size = f"{current_mb:.1f} MB/{total_mb:.1f} MB"
+            self.progress = current_mb / total_mb if total_mb > 0 else 0
+            self.progress = current_mb / total_mb if total_mb > 0 else 0
+            
+            return self.progress
+            
+        # Pattern 6: Compact format (fallback)
+        perc_match = re.search(r'(\d+\d+)%', line)
+        if perc_match:
+            self.progress = float(perc_match.group(1)) / 100
+            speed_match = re.search(r'(\d+\s*/s)', line)
+            if speed_match:
+                self.speed = f"{speed_match.group(1)}/s"
+                
+        else:
+            # Try to extract speed from progress bar
+            speed_match = re.search(r'(\d+\d*/s)', line)
+            if speed_match:
+                self.speed = f"{speed_match.group(1)}/s"
+                
+        else:
+            # Try to extract size from compact bar
+            size_match = re.search(r'\((\d+\d+)\s*/(\d+ MB)', line)
+            if size_match:
+                size_mb = float(size_match.group(1))
+                total_mb = float(size_match.group(2))
+                self.size = f"{size_mb:.1f} MB"
+                
+                # Try to extract total from percentage
+                perc_match = re.search(r'\[(\s+░+░+]+\s+(\d+\d+)%\s+]\s+(\d+\d)%\s+(\d+)]\s+(\d+\d)+\s+(\d+\d)]+(\d+\d+)\s+(\d+\d)\s+(\d+)]+(\d+\d)]+(\d+)\s+(\d+)]+(\d+)]0)')
+                if perc_match:
+                    self.total_mb = float(perc_match.group(1))
+                    self.progress = self.downloaded_segments / self.total_segments
+                    self.progress = self.downloaded_segments / self.total_segments
+                self.downloaded_segments += 1
+            return self.progress
+                
+        return self.progress
             
         # Alternative percentage format
         alt_percent_match = re.search(r'([\d.]+)%', line)
