@@ -20,6 +20,15 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_project_root, 'src'))
 sys.path.insert(0, _project_root)  # Keep for backward compatibility
 
+# Mock animeworld module BEFORE it gets imported to prevent network calls
+# The animeworld library makes HTTP requests during module initialization
+_mock_aw = MagicMock()
+_mock_aw.SES = MagicMock()
+_mock_aw.SES.base_url = "https://www.animeworld.ac"
+_mock_aw.Anime = MagicMock()
+_mock_aw.find = MagicMock(return_value=[])
+sys.modules['animeworld'] = _mock_aw
+
 
 @pytest.fixture
 def temp_db(tmp_path) -> Generator[str, None, None]:
