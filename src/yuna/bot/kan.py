@@ -429,8 +429,9 @@ Seleziona una categoria:
             dl_id = self._next_download_id("anime")
             tracker.add_download(dl_id, f"{name} ({len(missing)} ep)", "anime")
 
-            async def anime_progress(prog, elapsed=None, size=None):
-                tracker.update_progress(dl_id, prog)
+            async def anime_progress(ep_num, progress, done=False):
+                # progress is 0.0-1.0, convert to percentage
+                tracker.update_progress(dl_id, progress * 100)
 
             # Download
             await miko.downloadEpisodes(missing, progress_callback=anime_progress)
