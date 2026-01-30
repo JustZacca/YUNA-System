@@ -398,8 +398,9 @@ Seleziona una categoria:
 
                     # Create progress callback for tracker
                     async def series_progress(current, total, ep_name=""):
-                        if tracker:
-                            tracker.update_progress(dl_id, current, total, ep_name)
+                        if tracker and total > 0:
+                            progress = (current / total) * 100
+                            tracker.update_progress(dl_id, progress)
 
                     await self.miko_sc.download_missing_episodes(name, series_progress)
 
