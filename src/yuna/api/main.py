@@ -88,8 +88,9 @@ def register_routes(app: FastAPI) -> None:
     """Register all API routes."""
 
     # Include routers from routes/
-    from yuna.api.routes import anime
+    from yuna.api.routes import anime, search
     app.include_router(anime.router, prefix=API_PREFIX)
+    app.include_router(search.router, prefix=API_PREFIX)
 
     # ==================== Health & Info ====================
 
