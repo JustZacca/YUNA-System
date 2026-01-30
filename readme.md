@@ -24,9 +24,11 @@
 
 ### Serie TV e Film (StreamingCommunity)
 - Ricerca film e serie TV su StreamingCommunity
-- Download in qualità HD/FHD via HLS
+- Download in qualità HD/FHD via HLS con **N_m3u8DL-RE**
+- Download paralleli ad alta velocità (fino a 16 thread)
 - Tracciamento serie con notifica nuovi episodi
 - Organizzazione automatica in cartelle (Serie/Stagione/Episodio)
+- Fallback automatico a ffmpeg se N_m3u8DL-RE non disponibile
 
 ### Generale
 - Aggiornamento automatico periodico della libreria
@@ -42,6 +44,14 @@
 - Token Bot Telegram
 - Chat ID Telegram autorizzato
 - (Opzionale) Jellyfin per la gestione della libreria media
+
+### Download Ottimizzati con N_m3u8DL-RE
+YUNA-System include **N_m3u8DL-RE** per download HLS più veloci:
+- ✅ Installazione automatica nel container Docker
+- ✅ Download paralleli fino a 16 thread
+- ✅ Miglior gestione degli errori e timeout
+- ✅ Auto-selezione qualità migliore
+- ✅ Fallback automatico a ffmpeg
 
 ---
 
@@ -157,6 +167,20 @@ downloads/
 
 ## Sviluppo
 
+### N_m3u8DL-RE
+Per uso locale (senza Docker), installa N_m3u8DL-RE manualmente:
+
+```bash
+# Installazione automatica
+python install_nm3u8.py
+
+# Verifica installazione
+python install_nm3u8.py --check
+
+# Test integrazione
+python test_nm3u8_integration.py
+```
+
 ### Eseguire i test
 ```bash
 pytest tests/ -v
@@ -167,6 +191,17 @@ pytest tests/ -v
 docker build -t yuna-system:local .
 ```
 
+### Configurazione N_m3u8DL-RE
+Nel file `.env` o `docker-compose.yml`:
+
+| Variabile | Default | Descrizione |
+|-----------|---------|-------------|
+| `PREFER_NM3U8` | `true` | Usa N_m3u8DL-RE per download veloci |
+| `NM3U8_THREAD_COUNT` | `16` | Thread paralleli per download |
+| `NM3U8_TIMEOUT` | `100` | Timeout richieste HTTP (secondi) |
+| `NM3U8_MAX_SPEED` | | Limite velocità (es: "15M", "100K") |
+| `NM3U8_BINARY_PATH` | | Path binario N_m3u8DL-RE |
+
 ---
 
 ## Ringraziamenti
@@ -175,6 +210,7 @@ Questo progetto utilizza risorse di terze parti:
 
 - **[MainKronos](https://github.com/MainKronos)** - Per [AnimeWorld-API](https://github.com/MainKronos/AnimeWorld-API), la libreria Python non ufficiale per AnimeWorld
 - **[Arrowar](https://github.com/Arrowar)** - Per [SC_Domains](https://github.com/Arrowar/SC_Domains), che fornisce gli URL aggiornati automaticamente per StreamingCommunity e altri siti di streaming
+- **[nilaoda](https://github.com/nilaoda)** - Per [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE), downloader HLS ad alte prestazioni
 - **[AnimeWorld](https://www.animeworld.ac)** - Fonte per il download degli anime
 - **[StreamingCommunity](https://streamingcommunity.computer)** - Fonte per serie TV e film
 

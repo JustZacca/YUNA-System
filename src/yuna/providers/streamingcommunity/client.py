@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 import httpx
 from bs4 import BeautifulSoup
 
+from yuna.providers.streamingcommunity.nm3u8_downloader import Nm3u8Config, Nm3u8DLREDownloader, create_downloader
+
 try:
     from fake_useragent import UserAgent
     ua = UserAgent()
@@ -819,11 +821,15 @@ class StreamingCommunity:
 
     def __init__(self, base_url: str = None,
                  movies_folder: str = "/downloads/movies",
-                 series_folder: str = "/downloads/series"):
+                 series_folder: str = "/downloads/series",
+                 prefer_nm3u8: bool = True,
+                 nm3u8_config: Nm3u8Config = None):
         self.client = StreamingCommunityClient(base_url)
         self.movies_folder = movies_folder
         self.series_folder = series_folder
         self._base_url = None
+        self.prefer_nm3u8 = prefer_nm3u8
+        self.nm3u8_config = nm3u8_config or Nm3u8Config()
 
     @property
     def base_url(self) -> str:
@@ -896,7 +902,16 @@ class StreamingCommunity:
 
         # Create folder for film
         film_folder = os.path.join(self.movies_folder, item.name)
-        downloader = HLSDownloader(film_folder)
+        
+        # Configure headers for N_m3u8DL-RE
+        headers = {
+            "User-Agent": get_user_agent(),
+            "Referer": self.base_url + "/"
+        }
+        self.nm3u8_config.headers = headers
+        
+        # Create downloader (N_m3u8DL-RE or fallback to ffmpeg)
+        downloader = create_downloader(film_folder, self.prefer_nm3u8, self.nm3u8_config)
 
         return await downloader.download(playlist_url, item.name, progress_callback)
 
@@ -930,7 +945,16 @@ class StreamingCommunity:
             series.name,
             f"S{season_number:02d}"
         )
-        downloader = HLSDownloader(season_folder)
+        
+        # Configure headers for N_m3u8DL-RE
+        headers = {
+            "User-Agent": get_user_agent(),
+            "Referer": self.base_url + "/"
+        }
+        self.nm3u8_config.headers = headers
+        
+        # Create downloader (N_m3u8DL-RE or fallback to ffmpeg)
+        downloader = create_downloader(season_folder, self.prefer_nm3u8, self.nm3u8_config)
 
         # Filename: SeriesName - S01E01 - Episode Title
         filename = f"{series.name} - S{season_number:02d}E{episode.number:02d}"
