@@ -701,10 +701,17 @@ class HLSDownloader:
             # Build ffmpeg command with progress output
             cmd = [
                 "ffmpeg",
+                # Input options for faster HLS download
+                "-reconnect", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5",
+                "-http_persistent", "1",
                 "-i", playlist_url,
+                # Output options
                 "-c", "copy",  # Copy streams without re-encoding
                 "-bsf:a", "aac_adtstoasc",  # Fix audio for MP4
                 "-movflags", "+faststart",  # Enable streaming
+                "-threads", "0",  # Use all CPU threads
                 "-y",  # Overwrite output
                 "-progress", "pipe:1",  # Progress to stdout
                 "-loglevel", "error",
