@@ -366,8 +366,8 @@ Seleziona una categoria:
                 )
                 asyncio.create_task(self._download_film_background(bot, item, tracker))
 
-            # Check series for new episodes
-            await self.miko_sc.check_and_download_new_episodes()
+            # Check series for new episodes (run as task like anime/films)
+            asyncio.create_task(self._download_series_background(bot, chat_id, tracker))
 
             await bot.send_message(
                 chat_id=chat_id,
@@ -377,6 +377,37 @@ Seleziona una categoria:
 
         except Exception as e:
             self.logger.error(f"Error downloading all missing: {e}")
+
+    async def _download_series_background(self, bot, chat_id, tracker):
+        """Background task to download missing series episodes."""
+        try:
+            series_list = self.miko_sc.get_library_series()
+            for series in series_list:
+                name = series.get("name")
+                if not name:
+                    continue
+
+                missing = self.miko_sc.get_missing_episodes(name)
+                if missing:
+                    total_missing = sum(len(eps) for eps in missing.values())
+                    dl_id = f"series_{name}"
+
+                    # Add to tracker
+                    if tracker:
+                        tracker.add_download(dl_id, f"{name} ({total_missing} ep)", "series")
+
+                    # Create progress callback for tracker
+                    async def series_progress(current, total, ep_name=""):
+                        if tracker:
+                            tracker.update_progress(dl_id, current, total, ep_name)
+
+                    await self.miko_sc.download_missing_episodes(name, series_progress)
+
+                    if tracker:
+                        tracker.complete_download(dl_id)
+
+        except Exception as e:
+            self.logger.error(f"Error downloading series: {e}")
 
     async def _download_anime_episodes_for_name(self, name: str, link: str, bot, tracker):
         """Download missing episodes for a single anime."""
