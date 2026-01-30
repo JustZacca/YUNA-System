@@ -83,7 +83,7 @@ jobs:
     - name: Build Docker image
       run: |
         echo "🐳 Building Docker image..."
-        docker build -t yuna-system:test .
+        docker build --no-cache -t yuna-system:test .
         
     - name: Test Docker image
       run: |
