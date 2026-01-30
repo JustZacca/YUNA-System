@@ -56,24 +56,26 @@ class Nm3u8ProgressParser:
         
         # Pattern 1: Main progress bar format
         # [████████████████████████████████████] 100.00% (100/100) 10.2 MB/10.2 MB/s ETA: 0:00:00
-        pattern = r'\[(█░+░+]+)\s+(\d+\d+)%\s+]\s+(\d+\d+)%\s+]'
-        match = pattern.match(r'\[(.*?)(\d+\.\d+)%\s+]?(\d+\d+)%\s+]')
+        pattern = re.compile(r'\[(█░+]+)\s+(\d+\.\d+)%\s+\((\d+)/(\d+)\)')
+        match = pattern.search(line)
         if match:
-            self.progress = float(match.group(1)) / 100
+            self.progress = float(match.group(2)) / 100
+            # Extract speed and size from the rest of the line
+            speed_match = re.search(r'([\d.]+)\s*MB/s', line)
+            if speed_match:
+                self.speed = f"{speed_match.group(1)} MB/s"
             
         # Pattern 2: Percentage only
-        perc_match = re.search(r'(\d+\.\d+)%\s+/\d+\d+', line)
+        perc_match = re.search(r'(\d+\.\d+)%', line)
         if perc_match:
-            current = float(perc_match.group(1))
-            speed_match = re.search(r'(\d+\d+) MB/s', line)
-            speed_str = speed_match.group(1) if speed_match else ""
-            size_match = re.search(r'(\d+\d+) MB/\d+\d+\s*\s+\d+)', line)
+            self.progress = float(perc_match.group(1)) / 100
+            speed_match = re.search(r'([\d.]+)\s*MB/s', line)
+            if speed_match:
+                self.speed = f"{speed_match.group(1)} MB/s"
+            size_match = re.search(r'([\d.]+)\s*MB', line)
             if size_match:
                 current_mb = float(size_match.group(1))
                 self.size = f"{current_mb:.1f} MB"
-                total_mb = float(size_match.group(2))
-                self.progress = current_mb / total_mb if total_mb > 0 else 0
-            self.speed = speed_str
             return self.progress
                 
         # Pattern 3: Compressed format (common in N_m3u8DL-RE)
@@ -81,8 +83,7 @@ class Nm3u8ProgressParser:
         # Pattern 4: Advanced multi-format
         # [\████████████████████████████] 99.75% (40/40 MB/3.8 MB/s ETA: 00:07:15)
         # [████████████████████████] 99.75% (40/40 MB/3.8 MB/s ETA: 00:07:15)
-        pattern4a = r'\[(█░+░+]+)\s+(\d+\d+)%\s+\]\s+(\d+\d+)\]\s+(\d+\d+]\s+(\d+\d+)\s+(\d+\d+)]\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)]+\s+(\d+)]+(\d+)\s+\d+)\s+(\d+\d+)\s+(\d+\d+]\s+(\d+\d+)\s+(\d+\d+]\s+(\d+)]+(\d+\d+)]+(\d+\d+)\s+(\d+)] 0 Downloading...    η)
-        pattern4a = re.compile(r'\[(█░+░+]+(\d+\d+)%\s+]\s+(\d+\d+)%\s+(\d+\d+)\s+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+\d+)\s+(\d+)]+(\d+)\s+(\d+)\s+(\d+\d+)\s+(\d+)]+(\d+)]+(\d+)]+(\d+)]0')
+        pattern4a = re.compile(r'\[(█░+░+]+)\s+(\d+\.\d+)%\s+\]\s+(\d+)/(\d+)\s+[A-Z/]+\s+[\d.]+/[A-Z]+\s+ETA:\s+[\d:]+')
         
         match = pattern4a.search(line)
         if match:
@@ -90,43 +91,36 @@ class Nm3u8ProgressParser:
             progress = float(match.group(1)) / 100
             
         # Pattern 5: Speed and size pattern
-        speed_size_match = re.search(r'(\d+\d+)\s*/s', line)
-        size_match = re.search(r'(\d+\d+)\s*/(\d+ MB/\d+\d+\s)', line)
+        speed_size_match = re.search(r'(\d+(?:\.\d+)?)\s*/s', line)
+        size_match = re.search(r'(\d+(?:\.\d+)?)\s*/\s*([\d.]+)\s*MB', line)
         if speed_size_match:
-            self.speed = speed_size_match.group(1)  # MB/s
+            self.speed = f"{speed_size_match.group(1)}/s"  # MB/s
             current_mb = float(speed_size_match.group(1))
-            size_match = re.search(r'(\d+\d+)\s*/(\d+ MB/\d+\s)', line)
-            total_mb = float(size_match.group(2))
-            self.size = f"{current_mb:.1f} MB/{total_mb:.1f} MB"
-            self.progress = current_mb / total_mb if total_mb > 0 else 0
-            self.progress = current_mb / total_mb if total_mb > 0 else 0
+            if size_match:
+                total_mb = float(size_match.group(2))
+                self.size = f"{current_mb:.1f} MB/{total_mb:.1f} MB"
+                self.progress = current_mb / total_mb if total_mb > 0 else 0
             
             return self.progress
             
         # Pattern 6: Compact format (fallback)
-        perc_match = re.search(r'(\d+\d+)%', line)
+        perc_match = re.search(r'(\d+(?:\.\d+)?)%', line)
         if perc_match:
             self.progress = float(perc_match.group(1)) / 100
-            speed_match = re.search(r'(\d+\s*/s)', line)
+            speed_match = re.search(r'(\d+(?:\.\d+)?\s*/s)', line)
             if speed_match:
                 self.speed = f"{speed_match.group(1)}/s"
-                
         else:
             # Try to extract speed from progress bar
-            speed_match = re.search(r'(\d+\d*/s)', line)
+            speed_match = re.search(r'(\d+(?:\.\d+)?\s*/s)', line)
             if speed_match:
                 self.speed = f"{speed_match.group(1)}/s"
                 
-        else:
             # Try to extract size from compact bar
-            size_match = re.search(r'\((\d+\d+)\s*/(\d+ MB)', line)
+            size_match = re.search(r'\((\d+(?:\.\d+)?)\s*MB', line)
             if size_match:
                 size_mb = float(size_match.group(1))
-                total_mb = float(size_match.group(2))
                 self.size = f"{size_mb:.1f} MB"
-                
-                # Try to extract total from percentage
-                perc_match = re.search(r'\[(\s+░+░+]+\s+(\d+\d+)%\s+]\s+(\d+\d)%\s+(\d+)]\s+(\d+\d)+\s+(\d+\d)]+(\d+\d+)\s+(\d+\d)\s+(\d+)]+(\d+\d)]+(\d+)\s+(\d+)]+(\d+)]0)')
                 if perc_match:
                     self.total_mb = float(perc_match.group(1))
                     self.progress = self.downloaded_segments / self.total_segments
@@ -176,7 +170,7 @@ class Nm3u8DLREDownloader:
     Provides faster parallel downloads with better error handling.
     """
     
-    def __init__(self, output_folder: str, config: Nm3u8Config = None):
+    def __init__(self, output_folder: str, config: Optional[Nm3u8Config] = None):
         """
         Initialize N_m3u8DL-RE downloader.
         
@@ -309,7 +303,7 @@ class Nm3u8DLREDownloader:
         return cmd
         
     async def download(self, playlist_url: str, output_name: str,
-                       progress_callback=None, total_duration: float = None) -> Tuple[bool, str]:
+                       progress_callback=None, total_duration: Optional[float] = None) -> Tuple[bool, str]:
         """
         Download HLS stream using N_m3u8DL-RE.
         
@@ -364,14 +358,24 @@ class Nm3u8DLREDownloader:
             last_callback = 0
             last_progress_line = ""
             
+            last_progress_line = ""
+            last_callback = 0.0
+            
             async def read_output():
                 """Read and parse output from both stdout and stderr."""
+                nonlocal last_progress_line, last_callback
                 while True:
                     # Try stdout first
-                    line = await process.stdout.readline()
+                    try:
+                        line = await process.stdout.readline() if process.stdout else b""
+                    except AttributeError:
+                        line = b""
                     if not line:
                         # Try stderr if stdout is done
-                        line = await process.stderr.readline()
+                        try:
+                            line = await process.stderr.readline() if process.stderr else b""
+                        except AttributeError:
+                            line = b""
                         if not line:
                             break
                             
@@ -488,7 +492,7 @@ class Nm3u8DLREDownloader:
 
 
 def create_downloader(output_folder: str, prefer_nm3u8: bool = True,
-                     config: Nm3u8Config = None):
+                     config: Optional[Nm3u8Config] = None):
     """
     Factory function to create appropriate downloader.
     
