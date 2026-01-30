@@ -597,6 +597,10 @@ class MikoSC:
         """Get all films from library."""
         return self.db.get_all_movies()
 
+    def get_pending_films(self) -> list:
+        """Get films that haven't been downloaded yet."""
+        return self.db.get_pending_movies()
+
     def remove_series(self, name: str) -> bool:
         """Remove a series from the library."""
         return self.db.remove_tv(name)
