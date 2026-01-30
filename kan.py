@@ -158,6 +158,36 @@ Usa i pulsanti o i comandi:
             reply_markup=keyboard
         )
 
+    def _back_to_menu_keyboard(self) -> InlineKeyboardMarkup:
+        """Create a simple back to menu keyboard."""
+        return KeyboardBuilder().button(f"{Emoji.BACK} Menu", "menu_back").build()
+
+    def _main_menu_keyboard(self) -> InlineKeyboardMarkup:
+        """Build the main menu keyboard."""
+        return KeyboardBuilder()\
+            .button(f"{Emoji.SEARCH} Cerca Anime", "menu_trova_anime")\
+            .button(f"{Emoji.LIST} Lista Anime", "menu_lista_anime").row()\
+            .button(f"{Emoji.DOWNLOAD} Scarica Episodi", "menu_download")\
+            .button(f"{Emoji.REMOVE} Rimuovi Anime", "menu_rimuovi_anime").row()\
+            .button(f"{Emoji.SEARCH} Cerca Film/Serie", "menu_cerca_sc")\
+            .button(f"{Emoji.LIST} Lista Serie", "menu_lista_serie").row()\
+            .button(f"{Emoji.LIST} Lista Film", "menu_lista_film")\
+            .button(f"{Emoji.REFRESH} Aggiorna", "menu_aggiorna").row()\
+            .build()
+
+    async def _show_main_menu(self, query):
+        """Show the main menu."""
+        welcome_text = f"""
+{Emoji.ANIME} *YUNA System — Media Manager*
+
+Seleziona un'opzione:
+"""
+        await query.edit_message_text(
+            welcome_text.strip(),
+            parse_mode="Markdown",
+            reply_markup=self._main_menu_keyboard()
+        )
+
     async def handle_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle main menu button clicks."""
         query = update.callback_query
@@ -169,10 +199,22 @@ Usa i pulsanti o i comandi:
 
         action = query.data
 
+        # Back to menu
+        if action == "menu_back":
+            await self._show_main_menu(query)
+            return
+
         # Map menu actions to handlers
         if action == "menu_trova_anime":
-            await query.edit_message_text(Messages.SEARCH_ANIME, parse_mode="Markdown")
-            return self.SEARCH_NAME
+            # Set state for waiting anime search
+            context.user_data["awaiting_search"] = "anime"
+            keyboard = self._back_to_menu_keyboard()
+            await query.edit_message_text(
+                f"{Emoji.SEARCH} *Cerca Anime*\n\n"
+                f"Scrivi il nome dell'anime da cercare:",
+                parse_mode="Markdown",
+                reply_markup=keyboard
+            )
         elif action == "menu_lista_anime":
             await self._show_anime_list(query)
         elif action == "menu_download":
@@ -180,38 +222,152 @@ Usa i pulsanti o i comandi:
         elif action == "menu_rimuovi_anime":
             await self._show_removal_menu(query, user_id)
         elif action == "menu_cerca_sc":
-            await query.edit_message_text(Messages.SEARCH_SC, parse_mode="Markdown")
+            # Set state for waiting SC search
+            context.user_data["awaiting_search"] = "sc"
+            keyboard = self._back_to_menu_keyboard()
+            await query.edit_message_text(
+                f"{Emoji.SEARCH} *Cerca Film/Serie*\n\n"
+                f"Scrivi il nome del film o serie da cercare:",
+                parse_mode="Markdown",
+                reply_markup=keyboard
+            )
         elif action == "menu_lista_serie":
             await self._show_series_list(query)
         elif action == "menu_lista_film":
             await self._show_film_list(query)
         elif action == "menu_aggiorna":
-            await query.edit_message_text(f"{Emoji.REFRESH} Aggiornamento libreria in corso...")
-            # Trigger update
+            keyboard = self._back_to_menu_keyboard()
+            await query.edit_message_text(
+                f"{Emoji.REFRESH} Aggiornamento libreria in corso...",
+                parse_mode="Markdown",
+                reply_markup=keyboard
+            )
             asyncio.create_task(self._update_library_background(context.bot))
+
+    async def handle_menu_search_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle search input from menu (not conversation)."""
+        user_id = update.effective_user.id
+        if user_id != self.AUTHORIZED_USER_ID:
+            return
+
+        awaiting = context.user_data.get("awaiting_search")
+        if not awaiting:
+            return  # Not waiting for search input
+
+        search_term = update.message.text.strip()
+        context.user_data["awaiting_search"] = None  # Clear state
+
+        if awaiting == "anime":
+            await self._do_anime_search(update, context, search_term)
+        elif awaiting == "sc":
+            await self._do_sc_search(update, context, search_term)
+
+    async def _do_anime_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_term: str):
+        """Perform anime search."""
+        await update.message.reply_text(f"{Emoji.SEARCH} Cerco *{search_term}*...", parse_mode="Markdown")
+
+        try:
+            results = self.miko_instance.searchAnime(search_term)
+            if not results:
+                await update.message.reply_text(
+                    f"{Emoji.EMPTY} Nessun risultato per '{search_term}'",
+                    reply_markup=self._back_to_menu_keyboard()
+                )
+                return
+
+            # Store results and show keyboard
+            self.anime_id_map[update.effective_user.id] = {f"anime_{i}": anime for i, anime in enumerate(results[:5])}
+
+            builder = KeyboardBuilder()
+            for i, anime in enumerate(results[:5]):
+                name = anime.get("name", "?")[:35]
+                builder.button(f"{Emoji.ANIME} {name}", f"anime_{i}").row()
+            builder.button(f"{Emoji.BACK} Menu", "menu_back")
+
+            await update.message.reply_text(
+                f"{Emoji.SUCCESS} *Risultati per '{search_term}':*",
+                parse_mode="Markdown",
+                reply_markup=builder.build()
+            )
+        except Exception as e:
+            self.logger.error(f"Anime search error: {e}")
+            await update.message.reply_text(
+                f"{Emoji.ERROR} Errore nella ricerca: {e}",
+                reply_markup=self._back_to_menu_keyboard()
+            )
+
+    async def _do_sc_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_term: str):
+        """Perform StreamingCommunity search."""
+        await update.message.reply_text(f"{Emoji.SEARCH} Cerco *{search_term}*...", parse_mode="Markdown")
+
+        try:
+            results = self.miko_sc.search(search_term)
+            if not results:
+                await update.message.reply_text(
+                    f"{Emoji.EMPTY} Nessun risultato per '{search_term}'",
+                    reply_markup=self._back_to_menu_keyboard()
+                )
+                return
+
+            # Store results
+            user_id = update.effective_user.id
+            self.sc_search_results[user_id] = results[:6]
+
+            # Build keyboard
+            builder = KeyboardBuilder()
+            type_emoji = {"tv": Emoji.SERIES, "movie": Emoji.FILM}
+
+            for i, item in enumerate(results[:6]):
+                emoji = type_emoji.get(item.type, Emoji.FILM)
+                name = item.name[:30] + "..." if len(item.name) > 30 else item.name
+                year = f" ({item.year})" if item.year else ""
+                builder.button(f"{emoji} {name}{year}", f"sc_select|{i}").row()
+
+            builder.button(f"{Emoji.BACK} Menu", "menu_back")
+
+            await update.message.reply_text(
+                f"{Emoji.SUCCESS} *Risultati per '{search_term}':*",
+                parse_mode="Markdown",
+                reply_markup=builder.build()
+            )
+        except Exception as e:
+            self.logger.error(f"SC search error: {e}")
+            await update.message.reply_text(
+                f"{Emoji.ERROR} Errore nella ricerca: {e}",
+                reply_markup=self._back_to_menu_keyboard()
+            )
 
     async def _show_anime_list(self, query):
         """Show anime list from menu."""
         anime_list = self.airi.get_anime()
         text = MessageFormatter.format_anime_list(anime_list, self.airi.BASE_URL)
-        await query.edit_message_text(text, parse_mode="Markdown", disable_web_page_preview=True)
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            disable_web_page_preview=True,
+            reply_markup=self._back_to_menu_keyboard()
+        )
 
     async def _show_download_menu(self, query):
         """Show download selection menu."""
         anime_list = self.airi.get_anime()
         if not anime_list:
-            await query.edit_message_text(Messages.NO_ANIME)
+            await query.edit_message_text(
+                Messages.NO_ANIME,
+                reply_markup=self._back_to_menu_keyboard()
+            )
             return
 
-        items = [(a.get("name", "?"), a.get("name", "")) for a in anime_list]
-        keyboard = MenuTemplates.search_results(
-            [(name, name, "anime") for name, _ in items],
-            prefix="download_anime"
-        )
+        builder = KeyboardBuilder()
+        for anime in anime_list:
+            name = anime.get("name", "?")
+            builder.button(f"{Emoji.ANIME} {name}", f"download_anime|{name}").row()
+        builder.button(f"{Emoji.BACK} Menu", "menu_back")
+
         await query.edit_message_text(
             f"{Emoji.DOWNLOAD} *Seleziona anime da scaricare:*",
             parse_mode="Markdown",
-            reply_markup=keyboard
+            reply_markup=builder.build()
         )
 
     async def _show_removal_menu(self, query, user_id):
@@ -229,13 +385,21 @@ Usa i pulsanti o i comandi:
         """Show series list from menu."""
         series_list = self.miko_sc.get_library_series()
         text = MessageFormatter.format_series_list(series_list)
-        await query.edit_message_text(text, parse_mode="Markdown")
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=self._back_to_menu_keyboard()
+        )
 
     async def _show_film_list(self, query):
         """Show film list from menu."""
         film_list = self.miko_sc.get_library_films()
         text = MessageFormatter.format_film_list(film_list)
-        await query.edit_message_text(text, parse_mode="Markdown")
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=self._back_to_menu_keyboard()
+        )
 
     async def _update_library_background(self, bot):
         """Background task to update library."""
@@ -243,13 +407,15 @@ Usa i pulsanti o i comandi:
             await self.miko_instance.checkNewEpisodes(bot)
             await bot.send_message(
                 self.AUTHORIZED_USER_ID,
-                f"{Emoji.SUCCESS} Aggiornamento libreria completato."
+                f"{Emoji.SUCCESS} Aggiornamento libreria completato.",
+                reply_markup=self._back_to_menu_keyboard()
             )
         except Exception as e:
             self.logger.error(f"Library update error: {e}")
             await bot.send_message(
                 self.AUTHORIZED_USER_ID,
-                f"{Emoji.ERROR} Errore aggiornamento: {e}"
+                f"{Emoji.ERROR} Errore aggiornamento: {e}",
+                reply_markup=self._back_to_menu_keyboard()
             )
 
     # Function to cancel the conversation
@@ -595,27 +761,21 @@ Usa i pulsanti o i comandi:
         anime_list = self.airi.get_anime()
         selected = self.selected_anime_for_removal.get(user_id, set())
 
-        keyboard = []
+        builder = KeyboardBuilder()
         for anime in anime_list:
             name = anime.get("name", "Sconosciuto")
             is_selected = name in selected
-            checkbox = "✅" if is_selected else "⬜"
-            keyboard.append([InlineKeyboardButton(
-                f"{checkbox} {name}",
-                callback_data=f"removal_toggle|{name}"
-            )])
+            checkbox = Emoji.CHECKBOX_ON if is_selected else Emoji.CHECKBOX_OFF
+            builder.button(f"{checkbox} {name}", f"removal_toggle|{name}").row()
 
-        # Bottoni azione
-        keyboard.append([
-            InlineKeyboardButton("✅ Seleziona Tutti", callback_data="removal_select_all"),
-            InlineKeyboardButton("⬜ Deseleziona", callback_data="removal_deselect_all")
-        ])
-        keyboard.append([
-            InlineKeyboardButton("🗑️ Conferma Rimozione", callback_data="removal_confirm"),
-            InlineKeyboardButton("❌ Annulla", callback_data="removal_cancel")
-        ])
+        # Action buttons
+        builder.button(f"{Emoji.CHECKBOX_ON} Seleziona Tutti", "removal_select_all")
+        builder.button(f"{Emoji.CHECKBOX_OFF} Deseleziona", "removal_deselect_all").row()
+        builder.button(f"{Emoji.REMOVE} Conferma", "removal_confirm")
+        builder.button(f"{Emoji.CANCEL} Annulla", "removal_cancel").row()
+        builder.button(f"{Emoji.BACK} Menu", "menu_back")
 
-        return InlineKeyboardMarkup(keyboard)
+        return builder.build()
 
     async def rimuovi_anime(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Mostra il menu per rimuovere anime dalla libreria."""
@@ -1185,26 +1345,20 @@ Usa i pulsanti o i comandi:
         series_list = self.miko_sc.get_library_series()
         selected = self.selected_series_for_removal.get(user_id, set())
 
-        keyboard = []
+        builder = KeyboardBuilder()
         for series in series_list:
             name = series.get("name", "Sconosciuto")
             is_selected = name in selected
-            checkbox = "✅" if is_selected else "⬜"
-            keyboard.append([InlineKeyboardButton(
-                f"{checkbox} {name}",
-                callback_data=f"sc_removal_toggle|{name}"
-            )])
+            checkbox = Emoji.CHECKBOX_ON if is_selected else Emoji.CHECKBOX_OFF
+            builder.button(f"{checkbox} {name}", f"sc_removal_toggle|{name}").row()
 
-        keyboard.append([
-            InlineKeyboardButton("✅ Seleziona Tutti", callback_data="sc_removal_select_all"),
-            InlineKeyboardButton("⬜ Deseleziona", callback_data="sc_removal_deselect_all")
-        ])
-        keyboard.append([
-            InlineKeyboardButton("🗑️ Conferma Rimozione", callback_data="sc_removal_confirm"),
-            InlineKeyboardButton("❌ Annulla", callback_data="sc_removal_cancel")
-        ])
+        builder.button(f"{Emoji.CHECKBOX_ON} Seleziona Tutti", "sc_removal_select_all")
+        builder.button(f"{Emoji.CHECKBOX_OFF} Deseleziona", "sc_removal_deselect_all").row()
+        builder.button(f"{Emoji.REMOVE} Conferma", "sc_removal_confirm")
+        builder.button(f"{Emoji.CANCEL} Annulla", "sc_removal_cancel").row()
+        builder.button(f"{Emoji.BACK} Menu", "menu_back")
 
-        return InlineKeyboardMarkup(keyboard)
+        return builder.build()
 
     async def rimuovi_serie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Command /rimuovi_serie - Remove series from library."""
@@ -1331,11 +1485,9 @@ Usa i pulsanti o i comandi:
         # Action buttons
         builder.button(f"{Emoji.CHECKBOX_ON} Seleziona Tutti", "film_removal_select_all")
         builder.button(f"{Emoji.CHECKBOX_OFF} Deseleziona", "film_removal_deselect_all").row()
-        builder.confirm_cancel(
-            confirm_text="Rimuovi",
-            confirm_data="film_removal_confirm",
-            cancel_data="film_removal_cancel"
-        )
+        builder.button(f"{Emoji.REMOVE} Conferma", "film_removal_confirm")
+        builder.button(f"{Emoji.CANCEL} Annulla", "film_removal_cancel").row()
+        builder.button(f"{Emoji.BACK} Menu", "menu_back")
 
         return builder.build()
 
@@ -1520,6 +1672,12 @@ Usa i pulsanti o i comandi:
 
         # Film removal command
         app.add_handler(CommandHandler("rimuovi_film", self.rimuovi_film))
+
+        # Menu search input handler (lower priority, group 1)
+        app.add_handler(MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            self.handle_menu_search_input
+        ), group=1)
 
         aggiorna_libreria_handler = CommandHandler("aggiorna_libreria", self.aggiorna_libreria)
         app.add_handler(aggiorna_libreria_handler)
