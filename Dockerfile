@@ -43,5 +43,12 @@ RUN mkdir -p /data /downloads
 # Test N_m3u8DL-RE installation
 RUN N_m3u8DL-RE --version || echo "⚠️ N_m3u8DL-RE installation test failed, will use ffmpeg fallback"
 
-# Default command
-CMD ["python", "main.py"]
+# Copy startup script
+COPY start.sh .
+RUN chmod +x start.sh
+
+# Expose API port
+EXPOSE 8000
+
+# Start both API and bot
+CMD ["./start.sh"]

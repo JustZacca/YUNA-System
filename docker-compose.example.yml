@@ -12,10 +12,22 @@ services:
     container_name: yuna-system
     restart: unless-stopped
 
+    ports:
+      - "8000:8000"  # API (docs: http://localhost:8000/api/docs)
+
     environment:
       # Telegram (obbligatorio)
       - TELEGRAM_TOKEN=your_bot_token_here
       - CHAT_ID=your_chat_id_here
+
+      # API Authentication (per PWA)
+      - YUNA_USERNAME=admin
+      - YUNA_PASSWORD=changeme
+      - JWT_SECRET=change-this-to-a-random-string
+
+      # TMDB API (opzionale, per metadata film/serie)
+      # Ottieni chiave gratuita: https://www.themoviedb.org/settings/api
+      # - TMDB_API_KEY=your_tmdb_api_key
 
       # Jellyfin (opzionale)
       # - JELLYFIN_URL=http://your-jellyfin:8096
