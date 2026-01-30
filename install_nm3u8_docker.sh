@@ -42,30 +42,32 @@ download_with_retry() {
 
 # Function to get version with multiple fallbacks
 get_version() {
-    echo "🔍 Getting latest version..."
-    
+    local ver=""
+
+    echo "🔍 Getting latest version..." >&2
+
     # Method 1: GitHub API with jq (preferred)
     if command -v jq >/dev/null 2>&1; then
-        VERSION=$(curl -s --connect-timeout 10 --max-time 30 \
+        ver=$(curl -s --connect-timeout 10 --max-time 30 \
                    "https://api.github.com/repos/nilaoda/N_m3u8DL-RE/releases/latest" \
                    2>/dev/null | jq -r '.tag_name' 2>/dev/null || true)
     fi
-    
+
     # Method 2: GitHub API with grep/sed (fallback)
-    if [ -z "$VERSION" ]; then
-        VERSION=$(curl -s --connect-timeout 10 --max-time 30 \
+    if [ -z "$ver" ]; then
+        ver=$(curl -s --connect-timeout 10 --max-time 30 \
                    "https://api.github.com/repos/nilaoda/N_m3u8DL-RE/releases/latest" \
                    2>/dev/null | grep '"tag_name"' | cut -d '"' -f 4 2>/dev/null || true)
     fi
-    
+
     # Method 3: Known recent version (last resort)
-    if [ -z "$VERSION" ]; then
-        echo "⚠️ Could not fetch version from GitHub API, using fallback"
-        VERSION="v20241201"
+    if [ -z "$ver" ]; then
+        echo "⚠️ Could not fetch version from GitHub API, using fallback" >&2
+        ver="v0.3.0-beta"
     fi
-    
-    echo "📦 Using version: ${VERSION}"
-    echo "$VERSION"
+
+    echo "📦 Using version: ${ver}" >&2
+    echo "$ver"
 }
 
 # Get version
