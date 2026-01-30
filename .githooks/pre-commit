@@ -1,0 +1,19 @@
+#!/bin/bash
+# Pre-commit hook: runs all tests before allowing commit
+
+echo "Running tests before commit..."
+
+# Run pytest
+python -m pytest tests/ -v --tb=short
+
+# Check the exit code
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ Tests failed! Commit aborted."
+    echo "Fix the failing tests before committing."
+    exit 1
+fi
+
+echo ""
+echo "✅ All tests passed! Proceeding with commit."
+exit 0
