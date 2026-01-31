@@ -396,7 +396,9 @@ async def _search_anime(query: str) -> List[SearchResult]:
 
     try:
         # Search AniList for rich metadata
+        logger.info(f"Searching AniList for: {query}")
         anilist_results = await anilist.search_anime(query, limit=10)
+        logger.info(f"AniList returned {len(anilist_results)} results")
 
         for anime in anilist_results:
             synopsis = anime.get("synopsis", "") or ""
@@ -414,7 +416,7 @@ async def _search_anime(query: str) -> List[SearchResult]:
             ))
 
     except Exception as e:
-        logger.error(f"AniList anime search error: {e}")
+        logger.error(f"AniList anime search error: {e}", exc_info=True)
 
     # Fallback to AnimeWorld if AniList fails or as supplement
     try:

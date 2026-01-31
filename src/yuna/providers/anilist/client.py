@@ -35,45 +35,7 @@ class AniListClient:
         Returns:
             List of anime results with metadata
         """
-        graphql_query = """
-        query ($search: String!, $page: Int, $perPage: Int) {
-          Page(page: $page, perPage: $perPage) {
-            media(search: $search, type: ANIME) {
-              id
-              title {
-                romaji
-                english
-                native
-              }
-              coverImage {
-                large
-                medium
-              }
-              description
-              format
-              status
-              startDate {
-                year
-                month
-                day
-              }
-              endDate {
-                year
-                month
-                day
-              }
-              episodes
-              season
-              seasonYear
-              genres
-              averageScore
-              popularity
-              synonyms
-              source
-            }
-          }
-        }
-        """
+        graphql_query = "query ($search: String!, $page: Int, $perPage: Int) { Page(page: $page, perPage: $perPage) { media(search: $search, type: ANIME) { id title { romaji english native } coverImage { large medium } description format status startDate { year month day } endDate { year month day } episodes season seasonYear genres averageScore popularity synonyms source } } }"
 
         variables = {
             "search": query,
@@ -110,43 +72,7 @@ class AniListClient:
         Returns:
             Anime metadata or None if not found
         """
-        graphql_query = """
-        query ($id: Int!) {
-          Media(id: $id, type: ANIME) {
-            id
-            title {
-              romaji
-              english
-              native
-            }
-            coverImage {
-              large
-              medium
-            }
-            description
-            format
-            status
-            startDate {
-              year
-              month
-              day
-            }
-            endDate {
-              year
-              month
-              day
-            }
-            episodes
-            season
-            seasonYear
-            genres
-            averageScore
-            popularity
-            synonyms
-            source
-          }
-        }
-        """
+        graphql_query = "query ($id: Int!) { Media(id: $id, type: ANIME) { id title { romaji english native } coverImage { large medium } description format status startDate { year month day } endDate { year month day } episodes season seasonYear genres averageScore popularity synonyms source } }"
 
         variables = {"id": anilist_id}
 
@@ -182,49 +108,7 @@ class AniListClient:
         Returns:
             List of top anime results
         """
-        graphql_query = """
-        query ($format: MediaFormat, $page: Int, $perPage: Int) {
-          Page(page: $page, perPage: $perPage) {
-            media(
-              type: ANIME,
-              format: $format,
-              sort: [POPULARITY_DESC, SCORE_DESC]
-            ) {
-              id
-              title {
-                romaji
-                english
-                native
-              }
-              coverImage {
-                large
-                medium
-              }
-              description
-              format
-              status
-              startDate {
-                year
-                month
-                day
-              }
-              endDate {
-                year
-                month
-                day
-              }
-              episodes
-              season
-              seasonYear
-              genres
-              averageScore
-              popularity
-              synonyms
-              source
-            }
-          }
-        }
-        """
+        graphql_query = "query ($format: MediaFormat, $page: Int, $perPage: Int) { Page(page: $page, perPage: $perPage) { media(type: ANIME, format: $format, sort: [POPULARITY_DESC, SCORE_DESC]) { id title { romaji english native } coverImage { large medium } description format status startDate { year month day } endDate { year month day } episodes season seasonYear genres averageScore popularity synonyms source } } }"
 
         variables = {
             "page": 1,
@@ -283,50 +167,7 @@ class AniListClient:
         else:
             season = season.upper()
 
-        graphql_query = """
-        query ($season: MediaSeason, $year: Int, $page: Int, $perPage: Int) {
-          Page(page: $page, perPage: $perPage) {
-            media(
-              type: ANIME,
-              season: $season,
-              seasonYear: $year,
-              sort: [POPULARITY_DESC, SCORE_DESC]
-            ) {
-              id
-              title {
-                romaji
-                english
-                native
-              }
-              coverImage {
-                large
-                medium
-              }
-              description
-              format
-              status
-              startDate {
-                year
-                month
-                day
-              }
-              endDate {
-                year
-                month
-                day
-              }
-              episodes
-              season
-              seasonYear
-              genres
-              averageScore
-              popularity
-              synonyms
-              source
-            }
-          }
-        }
-        """
+        graphql_query = "query ($season: MediaSeason, $year: Int, $page: Int, $perPage: Int) { Page(page: $page, perPage: $perPage) { media(type: ANIME, season: $season, seasonYear: $year, sort: [POPULARITY_DESC, SCORE_DESC]) { id title { romaji english native } coverImage { large medium } description format status startDate { year month day } endDate { year month day } episodes season seasonYear genres averageScore popularity synonyms source } } }"
 
         variables = {
             "season": season,
