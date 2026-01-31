@@ -6,7 +6,7 @@
   import type { SearchResult, SearchResponse } from '$lib/types';
 
   let searchQuery = '';
-  let searchType: 'all' | 'anime' | 'series' | 'film' = 'all';
+  let searchType: 'anime' | 'series' | 'film' = 'anime';
   let results: SearchResponse | null = null;
   let loading = false;
   let hasSearched = false;
@@ -47,7 +47,7 @@
     }
   }
 
-  function setType(type: 'all' | 'anime' | 'series' | 'film') {
+  function setType(type: 'anime' | 'series' | 'film') {
     searchType = type;
     if (searchQuery.trim()) {
       handleSearch();
@@ -79,13 +79,6 @@
         <div class="search-form">
           <!-- Filter Chips -->
           <div class="filter-chips">
-            <button
-              class="chip"
-              class:selected={searchType === 'all'}
-              on:click={() => setType('all')}
-            >
-              Tutto
-            </button>
             <button
               class="chip"
               class:selected={searchType === 'anime'}
@@ -227,6 +220,8 @@
 
 <style>
   .search-page {
+    display: flex;
+    flex-direction: column;
     min-height: 100vh;
     background: var(--m3c-surface);
   }
@@ -276,9 +271,13 @@
 
   /* Main Content */
   .main-content {
+    flex: 1;
     max-width: 1200px;
     margin: 0 auto;
     padding: 16px;
+    overflow-y: auto;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   /* Search Section */
@@ -291,6 +290,7 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
+    box-sizing: border-box;
   }
 
   .search-input-wrapper {
@@ -536,12 +536,23 @@
 
   /* Responsive */
   @media (max-width: 768px) {
+    .main-content {
+      padding: 12px;
+      padding-bottom: 100px;
+    }
+
+    .search-form {
+      padding: 12px;
+    }
+
     .results-grid {
       grid-template-columns: 1fr;
+      gap: 12px;
     }
 
     .result-card {
       flex-direction: column;
+      padding: 12px;
     }
 
     .result-poster,

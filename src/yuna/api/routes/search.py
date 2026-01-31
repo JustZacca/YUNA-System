@@ -58,7 +58,6 @@ class MediaType(str, Enum):
     anime = "anime"
     series = "series"
     film = "film"
-    all = "all"
 
 
 class SearchResult(BaseModel):
@@ -117,12 +116,13 @@ class TrendingResponse(BaseModel):
 @router.get("", response_model=SearchResponse)
 async def search(
     q: str = Query(..., min_length=2, description="Search query"),
-    type: MediaType = Query(MediaType.all, description="Filter by media type"),
+    type: MediaType = Query(..., description="Media type: anime, series, or film"),
 ):
     """
-    Search for anime, series, and films.
+    Search for anime, series, or films.
 
-    Uses TMDB for rich metadata (poster, rating, description).
+    Requires explicit type selection (anime, series, or film).
+    Uses AniList for anime, TMDB for series/films.
     Then matches with download providers (AnimeWorld, StreamingCommunity).
     """
     results = SearchResponse(query=q, total=0)
@@ -132,72 +132,73 @@ async def search(
     results.tmdb_available = tmdb.is_available()
     results.anilist_available = anilist.is_available()
 
-    # Search anime if requested
-    if type in (MediaType.all, MediaType.anime):
+    # Search anime
+    if type == MediaType.anime:
         anime_results = await _search_anime(q)
         results.anime = anime_results
         results.total += len(anime_results)
 
-    # Search movies/series via TMDB if requested
-    if type in (MediaType.all, MediaType.series, MediaType.film):
+    # Search films
+    elif type == MediaType.film:
         if tmdb.is_available():
-            # Use TMDB for rich metadata
             tmdb_results = await tmdb.search_multi(q)
-
-            # Process movies
-            if type in (MediaType.all, MediaType.film):
-                for movie in tmdb_results.get("movies", []):
-                    result = SearchResult(
-                        name=movie.title,
-                        type="film",
-                        year=movie.year,
-                        tmdb_id=movie.id,
-                        overview=movie.overview,
-                        poster=movie.poster_url,
-                        backdrop=movie.backdrop_url,
-                        rating=movie.vote_average,
-                        vote_count=movie.vote_count,
-                        genres=movie.genres,
-                        runtime=movie.runtime,
-                    )
-                    # Try to find on StreamingCommunity
-                    await _enrich_with_provider(result)
-                    results.films.append(result)
-
-            # Process series
-            if type in (MediaType.all, MediaType.series):
-                for series in tmdb_results.get("series", []):
-                    result = SearchResult(
-                        name=series.name,
-                        type="series",
-                        year=series.year,
-                        tmdb_id=series.id,
-                        overview=series.overview,
-                        poster=series.poster_url,
-                        backdrop=series.backdrop_url,
-                        rating=series.vote_average,
-                        vote_count=series.vote_count,
-                        genres=series.genres,
-                        seasons=series.number_of_seasons,
-                        episodes=series.number_of_episodes,
-                        status=series.status,
-                    )
-                    # Try to find on StreamingCommunity
-                    await _enrich_with_provider(result)
-                    results.series.append(result)
-
-            results.total += len(results.films) + len(results.series)
+            for movie in tmdb_results.get("movies", []):
+                result = SearchResult(
+                    name=movie.title,
+                    type="film",
+                    year=movie.year,
+                    tmdb_id=movie.id,
+                    overview=movie.overview,
+                    poster=movie.poster_url,
+                    backdrop=movie.backdrop_url,
+                    rating=movie.vote_average,
+                    vote_count=movie.vote_count,
+                    genres=movie.genres,
+                    runtime=movie.runtime,
+                )
+                # Try to find on StreamingCommunity
+                await _enrich_with_provider(result)
+                results.films.append(result)
+            results.total += len(results.films)
         else:
             # Fallback to direct StreamingCommunity search
             sc_results = await _search_streamingcommunity_direct(q, type)
             for item in sc_results:
-                if item.type == "film":
-                    results.films.append(item)
-                else:
-                    results.series.append(item)
+                results.films.append(item)
             results.total += len(sc_results)
 
-    logger.info(f"Search '{q}' returned {results.total} results")
+    # Search series
+    elif type == MediaType.series:
+        if tmdb.is_available():
+            tmdb_results = await tmdb.search_multi(q)
+            for series in tmdb_results.get("series", []):
+                result = SearchResult(
+                    name=series.name,
+                    type="series",
+                    year=series.year,
+                    tmdb_id=series.id,
+                    overview=series.overview,
+                    poster=series.poster_url,
+                    backdrop=series.backdrop_url,
+                    rating=series.vote_average,
+                    vote_count=series.vote_count,
+                    genres=series.genres,
+                    seasons=series.number_of_seasons,
+                    episodes=series.number_of_episodes,
+                    status=series.status,
+                )
+                # Try to find on StreamingCommunity
+                await _enrich_with_provider(result)
+                results.series.append(result)
+            results.total += len(results.series)
+        else:
+            # Fallback to direct StreamingCommunity search
+            sc_results = await _search_streamingcommunity_direct(q, type)
+            for item in sc_results:
+                results.series.append(item)
+            results.total += len(sc_results)
+
+    logger.info(f"Search '{q}' (type={type}) returned {results.total} results")
     return results
 
 
@@ -415,10 +416,10 @@ async def _search_anime(query: str) -> List[SearchResult]:
     except Exception as e:
         logger.error(f"AniList anime search error: {e}")
 
-    # Fallback to AnimeWorld if Jikan fails or as supplement
+    # Fallback to AnimeWorld if AniList fails or as supplement
     try:
         miko = Miko()
-        anime_list = await miko.findAnime(query)
+        anime_list = miko.findAnime(query)  # Synchronous function, no await
 
         for anime in anime_list[:10]:
             name = anime.getName() if hasattr(anime, 'getName') else str(anime)
