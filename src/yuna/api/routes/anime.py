@@ -11,7 +11,8 @@ from pydantic import BaseModel, HttpUrl
 
 from yuna.api.deps import DbDep, CurrentUser
 from yuna.services.media_service import Miko
-from yuna.providers.jikan import JikanClient
+from yuna.providers.anilist import AniListClient
+from yuna.config import config
 from yuna.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -28,8 +29,8 @@ class AnimeBase(BaseModel):
     episodes_downloaded: int = 0
     episodes_total: int = 0
     last_update: Optional[str] = None
-    # Jikan metadata
-    mal_id: Optional[int] = None
+    # AniList metadata
+    anilist_id: Optional[int] = None
     synopsis: Optional[str] = None
     rating: Optional[float] = None
     year: Optional[int] = None
@@ -95,16 +96,16 @@ class EpisodesResponse(BaseModel):
 # Simple in-memory tracking of active downloads
 _active_downloads: dict = {}
 
-# Jikan client singleton
-_jikan_client: Optional[JikanClient] = None
+# AniList client singleton
+_anilist_client: Optional[AniListClient] = None
 
 
-def get_jikan() -> JikanClient:
-    """Get Jikan client singleton."""
-    global _jikan_client
-    if _jikan_client is None:
-        _jikan_client = JikanClient()
-    return _jikan_client
+def get_anilist() -> AniListClient:
+    """Get AniList client singleton."""
+    global _anilist_client
+    if _anilist_client is None:
+        _anilist_client = AniListClient(access_token=config.anilist_access_token)
+    return _anilist_client
 
 
 def get_download_status(anime_name: str) -> Optional[dict]:
@@ -141,7 +142,7 @@ async def list_anime(db: DbDep):
             episodes_downloaded=a.get("episodi_scaricati", 0),
             episodes_total=a.get("numero_episodi", 0),
             last_update=a.get("last_update"),
-            # Try to get Jikan metadata from database
+            # Try to get AniList metadata from database
             mal_id=a.get("mal_id"),
             synopsis=a.get("synopsis"),
             rating=a.get("rating"),
@@ -160,7 +161,7 @@ async def get_anime(name: str, db: DbDep):
     """
     Get detailed info for a specific anime.
 
-    Includes missing episodes list.
+    Includes missing episodes list and AniList metadata.
     """
     anime = db.get_anime_by_name(name)
 
@@ -185,6 +186,14 @@ async def get_anime(name: str, db: DbDep):
         last_update=anime.get("last_update"),
         missing_episodes=missing,
         folder_path=None,  # Could be populated from Airi
+        # AniList metadata
+        anilist_id=anime.get("anilist_id"),
+        synopsis=anime.get("synopsis"),
+        rating=anime.get("rating"),
+        year=anime.get("year"),
+        genres=anime.get("genres", "").split(",") if anime.get("genres") else [],
+        status=anime.get("status"),
+        poster_url=anime.get("poster_url"),
     )
 
 
@@ -206,7 +215,7 @@ async def add_anime(request: AnimeAddRequest, db: DbDep, user: CurrentUser):
         )
 
     try:
-        # Extract anime name from URL for Jikan search
+        # Extract anime name from URL for AniList search
         from urllib.parse import urlparse
         import re
         
@@ -219,48 +228,48 @@ async def add_anime(request: AnimeAddRequest, db: DbDep, user: CurrentUser):
             potential_name = path_parts[-1].replace('-', ' ').title()
             anime_name = potential_name
         
-        # Initialize Jikan metadata
-        jikan_metadata = {}
+        # Initialize AniList metadata
+        anilist_metadata = {}
         
-        # Try to get Jikan metadata
+        # Try to get AniList metadata
         if anime_name:
             try:
-                jikan = get_jikan()
-                jikan_results = await jikan.search_anime(anime_name, limit=1)
+                anilist = get_anilist()
+                anilist_results = await anilist.search_anime(anime_name, limit=1)
                 
-                if jikan_results:
-                    anime = jikan_results[0]
-                    jikan_metadata = {
-                        "mal_id": anime.mal_id,
-                        "synopsis": anime.synopsis[:500],  # Limit length
-                        "rating": anime.score,
-                        "year": anime.year,
-                        "genres": ",".join(anime.genre_names),
-                        "status": anime.status,
-                        "poster_url": anime.poster_url,
+                if anilist_results:
+                    anime = anilist_results[0]
+                    anilist_metadata = {
+                        "anilist_id": anime.get("anilist_id"),
+                        "synopsis": anime.get("synopsis", "")[:500] if anime.get("synopsis") else "",
+                        "rating": anime.get("rating", 0),
+                        "year": anime.get("year"),
+                        "genres": ",".join(anime.get("genres", [])),
+                        "status": anime.get("status", ""),
+                        "poster_url": anime.get("poster_url", ""),
                     }
-                    logger.info(f"Found Jikan metadata for {anime_name}: MAL ID {anime.mal_id}")
+                    logger.info(f"Found AniList metadata for {anime_name}: AniList ID {anime.get('anilist_id')}")
                 
             except Exception as e:
-                logger.warning(f"Jikan metadata fetch failed for {anime_name}: {e}")
+                logger.warning(f"AniList metadata fetch failed for {anime_name}: {e}")
 
         # Use Miko to add anime
         miko = Miko()
         result = await miko.addAnime(url)
 
         if result:
-            # Update database with Jikan metadata if available
-            if jikan_metadata and miko.anime_name:
+            # Update database with AniList metadata if available
+            if anilist_metadata and miko.anime_name:
                 try:
-                    db.update_anime(miko.anime_name, **jikan_metadata)
-                    logger.info(f"Updated {miko.anime_name} with Jikan metadata")
+                    db.update_anime(miko.anime_name, **anilist_metadata)
+                    logger.info(f"Updated {miko.anime_name} with AniList metadata")
                 except Exception as e:
-                    logger.warning(f"Failed to update anime with Jikan metadata: {e}")
+                    logger.warning(f"Failed to update anime with AniList metadata: {e}")
 
             return AnimeAddResponse(
                 success=True,
                 name=miko.anime_name or "Unknown",
-                message=f"Anime '{miko.anime_name}' added successfully" + (" with Jikan metadata" if jikan_metadata else "")
+                message=f"Anime '{miko.anime_name}' added successfully" + (" with AniList metadata" if anilist_metadata else "")
             )
         else:
             raise HTTPException(
@@ -270,6 +279,85 @@ async def add_anime(request: AnimeAddRequest, db: DbDep, user: CurrentUser):
 
     except Exception as e:
         logger.error(f"Error adding anime: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+class AnimeMetadataUpdate(BaseModel):
+    """Update anime metadata from Jikan."""
+    mal_id: Optional[int] = None
+    synopsis: Optional[str] = None
+    rating: Optional[float] = None
+    year: Optional[int] = None
+    genres: Optional[str] = None  # Comma-separated
+    status: Optional[str] = None
+    poster_url: Optional[str] = None
+
+
+@router.patch("/{name}", response_model=AnimeDetail)
+async def update_anime_metadata(name: str, request: AnimeMetadataUpdate, db: DbDep, user: CurrentUser):
+    """
+    Update anime metadata from Jikan.
+    
+    Requires authentication.
+    """
+    anime = db.get_anime_by_name(name)
+
+    if not anime:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anime '{name}' not found"
+        )
+
+    try:
+        # Update anime metadata
+        update_data = {}
+        if request.mal_id is not None:
+            update_data["mal_id"] = request.mal_id
+        if request.synopsis is not None:
+            update_data["synopsis"] = request.synopsis
+        if request.rating is not None:
+            update_data["rating"] = request.rating
+        if request.year is not None:
+            update_data["year"] = request.year
+        if request.genres is not None:
+            update_data["genres"] = request.genres
+        if request.status is not None:
+            update_data["status"] = request.status
+        if request.poster_url is not None:
+            update_data["poster_url"] = request.poster_url
+
+        db.update_anime(name, **update_data)
+        logger.info(f"Updated metadata for anime '{name}'")
+
+        # Return updated anime detail
+        updated_anime = db.get_anime_by_name(name)
+        
+        # Calculate missing episodes
+        downloaded = updated_anime.get("episodi_scaricati", 0)
+        total = updated_anime.get("numero_episodi", 0)
+        missing = list(range(downloaded + 1, total + 1)) if total > downloaded else []
+
+        return AnimeDetail(
+            name=updated_anime["name"],
+            link=updated_anime.get("link", ""),
+            episodes_downloaded=downloaded,
+            episodes_total=total,
+            last_update=updated_anime.get("last_update"),
+            missing_episodes=missing,
+            folder_path=None,
+            mal_id=updated_anime.get("mal_id"),
+            synopsis=updated_anime.get("synopsis"),
+            rating=updated_anime.get("rating"),
+            year=updated_anime.get("year"),
+            genres=updated_anime.get("genres", "").split(",") if updated_anime.get("genres") else [],
+            status=updated_anime.get("status"),
+            poster_url=updated_anime.get("poster_url"),
+        )
+    except Exception as e:
+        logger.error(f"Error updating anime metadata: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

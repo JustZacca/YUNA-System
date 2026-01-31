@@ -1,0 +1,157 @@
+/* M3 Svelte Theme - YUNA Purple Dark */
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
+
+/* M3 Color Tokens - Dark Theme */
+:root {
+  /* Primary */
+  --m3c-primary: #D0BCFF;
+  --m3c-on-primary: #381E72;
+  --m3c-primary-container: #4F378B;
+  --m3c-on-primary-container: #EADDFF;
+
+  /* Secondary */
+  --m3c-secondary: #CCC2DC;
+  --m3c-on-secondary: #332D41;
+  --m3c-secondary-container: #4A4458;
+  --m3c-on-secondary-container: #E8DEF8;
+
+  /* Tertiary */
+  --m3c-tertiary: #EFB8C8;
+  --m3c-on-tertiary: #492532;
+  --m3c-tertiary-container: #633B48;
+  --m3c-on-tertiary-container: #FFD8E4;
+
+  /* Error */
+  --m3c-error: #F2B8B5;
+  --m3c-on-error: #601410;
+  --m3c-error-container: #8C1D18;
+  --m3c-on-error-container: #F9DEDC;
+
+  /* Surface */
+  --m3c-surface: #1C1B1F;
+  --m3c-surface-dim: #141218;
+  --m3c-surface-bright: #3B383E;
+  --m3c-surface-container-lowest: #0F0D13;
+  --m3c-surface-container-low: #1D1B20;
+  --m3c-surface-container: #211F26;
+  --m3c-surface-container-high: #2B2930;
+  --m3c-surface-container-highest: #36343B;
+
+  /* On Surface */
+  --m3c-on-surface: #E6E1E5;
+  --m3c-on-surface-variant: #CAC4D0;
+
+  /* Outline */
+  --m3c-outline: #938F99;
+  --m3c-outline-variant: #49454F;
+
+  /* Inverse */
+  --m3c-inverse-surface: #E6E1E5;
+  --m3c-inverse-on-surface: #313033;
+  --m3c-inverse-primary: #6750A4;
+
+  /* Shadow */
+  --m3c-shadow: #000000;
+  --m3c-scrim: #000000;
+
+  /* Font */
+  --m3-font: 'Roboto', system-ui, sans-serif;
+
+  /* Shape */
+  --m3-shape-none: 0px;
+  --m3-shape-extra-small: 4px;
+  --m3-shape-small: 8px;
+  --m3-shape-medium: 12px;
+  --m3-shape-large: 16px;
+  --m3-shape-extra-large: 28px;
+  --m3-shape-full: 9999px;
+
+  /* Elevation */
+  --m3-elevation-0: none;
+  --m3-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
+  --m3-elevation-2: 0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
+  --m3-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.30);
+  --m3-elevation-4: 0px 6px 10px 4px rgba(0, 0, 0, 0.15), 0px 2px 3px 0px rgba(0, 0, 0, 0.30);
+  --m3-elevation-5: 0px 8px 12px 6px rgba(0, 0, 0, 0.15), 0px 4px 4px 0px rgba(0, 0, 0, 0.30);
+}
+
+/* Base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--m3-font);
+  background-color: var(--m3c-surface);
+  color: var(--m3c-on-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--m3c-surface-container);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--m3c-outline);
+  border-radius: var(--m3-shape-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--m3c-on-surface-variant);
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Layout utilities */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* Bottom navigation offset for snackbars */
+@media (max-width: 840px) {
+  :root {
+    --m3v-bottom-offset: 80px;
+  }
+}

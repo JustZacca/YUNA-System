@@ -149,15 +149,24 @@ class JikanClient:
 
     def _parse_anime_data(self, data: Dict[str, Any]) -> JikanAnime:
         """Parse anime data from API response."""
+        # Handle synopsis safely - API can return None
+        raw_synopsis = data.get("synopsis") or ""
+        synopsis = raw_synopsis[:500] if len(raw_synopsis) > 500 else raw_synopsis
+
+        # Handle score safely - API can return None
+        score = data.get("score")
+        if score is None:
+            score = 0.0
+
         return JikanAnime(
             mal_id=data.get("mal_id", 0),
             title=data.get("title", ""),
             title_english=data.get("title_english"),
             title_japanese=data.get("title_japanese"),
-            synopsis=data.get("synopsis", "")[:500] if data.get("synopsis") else "",  # Limit length
+            synopsis=synopsis,
             episodes=data.get("episodes"),
             rating=data.get("rating"),
-            score=data.get("score", 0.0),
+            score=score,
             scored_by=data.get("scored_by", 0),
             rank=data.get("rank"),
             popularity=data.get("popularity", 0),
@@ -166,16 +175,16 @@ class JikanClient:
             status=data.get("status"),
             year=data.get("year"),
             season=data.get("season"),
-            genres=data.get("genres", []),
-            studios=data.get("studios", []),
-            producers=data.get("producers", []),
+            genres=data.get("genres") or [],
+            studios=data.get("studios") or [],
+            producers=data.get("producers") or [],
             source=data.get("source"),
             duration=data.get("duration"),
             airing=data.get("airing", False),
             type=data.get("type"),
-            images=data.get("images", {}),
-            trailer=data.get("trailer", {}),
-            broadcast=data.get("broadcast", {}),
+            images=data.get("images") or {},
+            trailer=data.get("trailer") or {},
+            broadcast=data.get("broadcast") or {},
         )
 
     # ==================== Search ====================

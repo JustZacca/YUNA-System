@@ -19,6 +19,9 @@ class YunaConfig:
         self.nm3u8_binary_path = os.getenv("NM3U8_BINARY_PATH")
         self.nm3u8_temp_dir = os.getenv("NM3U8_TEMP_DIR")
         
+        # Load AniList settings
+        self.anilist_access_token = os.getenv("ANILIST_ACCESS_TOKEN", "e2jKyArZWW10PCqEbRzabasjtiJAKY6yxpYBe3oY")
+        
     def _get_bool(self, key: str, default: bool = False) -> bool:
         """Get boolean from environment variable."""
         value = os.getenv(key, "").lower()

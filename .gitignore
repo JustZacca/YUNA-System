@@ -8,7 +8,6 @@
 
 # Downloads folder (anime files)
 downloads/
-/downloads/
 
 # Database files (only root /data/ folder, not src/yuna/data/)
 /data/
@@ -94,7 +93,28 @@ pip-delete-this-directory.txt
 # ------------------------------------------
 # Misc
 # ------------------------------------------
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Media
 *.mp4
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+
+# Caches and build artifacts
+.cache/
+.mypy_cache/
+.sass-cache/
+.svelte-kit/
+frontend/.svelte-kit/
+dist/

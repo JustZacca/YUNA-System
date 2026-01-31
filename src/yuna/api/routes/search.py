@@ -10,7 +10,8 @@ from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 
 from yuna.providers.tmdb import TMDBClient
-from yuna.providers.jikan import JikanClient
+from yuna.providers.anilist import AniListClient
+from yuna.config import config
 
 # Global instances
 _miko_sc: Optional[Any] = None
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/search", tags=["Search"])
 
 # Shared client instances
 _tmdb_client: Optional[TMDBClient] = None
-_jikan_client: Optional[JikanClient] = None
+_anilist_client: Optional[AniListClient] = None
 
 
 def get_tmdb() -> TMDBClient:
@@ -34,12 +35,12 @@ def get_tmdb() -> TMDBClient:
     return _tmdb_client
 
 
-def get_jikan() -> JikanClient:
-    """Get Jikan client singleton."""
-    global _jikan_client
-    if _jikan_client is None:
-        _jikan_client = JikanClient()
-    return _jikan_client
+def get_anilist() -> AniListClient:
+    """Get AniList client singleton."""
+    global _anilist_client
+    if _anilist_client is None:
+        _anilist_client = AniListClient(access_token=config.anilist_access_token)
+    return _anilist_client
 
 
 def get_miko_sc() -> MikoSC:
@@ -102,7 +103,7 @@ class SearchResponse(BaseModel):
     series: List[SearchResult] = []
     films: List[SearchResult] = []
     tmdb_available: bool = True
-    jikan_available: bool = True
+    anilist_available: bool = True
 
 
 class TrendingResponse(BaseModel):
@@ -126,10 +127,10 @@ async def search(
     """
     results = SearchResponse(query=q, total=0)
     tmdb = get_tmdb()
-    jikan = get_jikan()
+    anilist = get_anilist()
 
     results.tmdb_available = tmdb.is_available()
-    results.jikan_available = jikan.is_available()
+    results.anilist_available = anilist.is_available()
 
     # Search anime if requested
     if type in (MediaType.all, MediaType.anime):
@@ -388,30 +389,31 @@ async def get_series_details(series_id: int):
 # ==================== Search Helpers ====================
 
 async def _search_anime(query: str) -> List[SearchResult]:
-    """Search for anime with Jikan metadata + AnimeWorld download links."""
+    """Search for anime with AniList metadata + AnimeWorld download links."""
     results = []
-    jikan = get_jikan()
+    anilist = get_anilist()
 
     try:
-        # Search Jikan for rich metadata
-        jikan_results = await jikan.search_anime(query, limit=10)
-        
-        for anime in jikan_results:
+        # Search AniList for rich metadata
+        anilist_results = await anilist.search_anime(query, limit=10)
+
+        for anime in anilist_results:
+            synopsis = anime.get("synopsis", "") or ""
             results.append(SearchResult(
-                name=anime.main_title,
+                name=anime.get("name", ""),
                 type="anime",
-                year=str(anime.year) if anime.year else None,
-                mal_id=anime.mal_id,
-                overview=anime.synopsis[:300] + "..." if len(anime.synopsis) > 300 else anime.synopsis,
-                poster=anime.poster_url,
-                rating=anime.score,
-                genres=anime.genre_names,
-                episodes=anime.episodes,
-                status=anime.status,
+                year=str(anime.get("year")) if anime.get("year") else None,
+                mal_id=anime.get("anilist_id"),
+                overview=synopsis[:300] + "..." if len(synopsis) > 300 else synopsis,
+                poster=anime.get("poster_url", ""),
+                rating=anime.get("rating", 0),
+                genres=anime.get("genres", []),
+                episodes=anime.get("episodes"),
+                status=anime.get("status", ""),
             ))
 
     except Exception as e:
-        logger.error(f"Jikan anime search error: {e}")
+        logger.error(f"AniList anime search error: {e}")
 
     # Fallback to AnimeWorld if Jikan fails or as supplement
     try:
@@ -542,7 +544,7 @@ async def search_anime_jikan(
 ):
     """
     Search anime using Jikan API (MyAnimeList metadata).
-    
+
     Provides rich anime metadata including:
     - MyAnimeList ID
     - English/Japanese titles
@@ -552,24 +554,25 @@ async def search_anime_jikan(
     - Episode count and status
     - Poster images
     """
-    jikan = get_jikan()
+    anilist = get_anilist()
     results = []
 
     try:
-        jikan_results = await jikan.search_anime(q, limit=limit)
-        
-        for anime in jikan_results:
+        anilist_results = await anilist.search_anime(q, limit=limit)
+
+        for anime in anilist_results:
+            synopsis = anime.get("synopsis") or ""
             results.append(SearchResult(
-                name=anime.main_title,
+                name=anime.get("name"),
                 type="anime",
-                year=str(anime.year) if anime.year else None,
-                mal_id=anime.mal_id,
-                overview=anime.synopsis[:300] + "..." if len(anime.synopsis) > 300 else anime.synopsis,
-                poster=anime.poster_url,
-                rating=anime.score,
-                genres=anime.genre_names,
-                episodes=anime.episodes,
-                status=anime.status,
+                year=str(anime.get("year")) if anime.get("year") else None,
+                mal_id=anime.get("anilist_id"),
+                overview=synopsis[:300] + "..." if len(synopsis) > 300 else synopsis,
+                poster=anime.get("poster_url"),
+                rating=anime.get("rating"),
+                genres=anime.get("genres", []),
+                episodes=anime.get("episodes"),
+                status=anime.get("status"),
             ))
 
     except Exception as e:
@@ -579,38 +582,7 @@ async def search_anime_jikan(
     return results
 
 
-@router.get("/anime/jikan/{mal_id}", response_model=SearchResult)
-async def get_anime_jikan(mal_id: int):
-    """
-    Get detailed anime information from Jikan API by MyAnimeList ID.
-    """
-    jikan = get_jikan()
-    
-    try:
-        anime = await jikan.get_anime(mal_id)
-        if not anime:
-            raise HTTPException(status_code=404, detail="Anime not found")
-
-        return SearchResult(
-            name=anime.main_title,
-            type="anime",
-            year=str(anime.year) if anime.year else None,
-            mal_id=anime.mal_id,
-            overview=anime.synopsis,
-            poster=anime.poster_url,
-            rating=anime.score,
-            genres=anime.genre_names,
-            episodes=anime.episodes,
-            status=anime.status,
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Jikan anime details error: {e}")
-        raise HTTPException(status_code=500, detail=f"Jikan API error: {str(e)}")
-
-
+# IMPORTANT: Static routes must come BEFORE parameterized routes in FastAPI
 @router.get("/anime/jikan/top", response_model=List[SearchResult])
 async def get_top_anime_jikan(
     type_filter: Optional[str] = Query(None, description="Filter by type: tv, movie, ova, special"),
@@ -619,24 +591,25 @@ async def get_top_anime_jikan(
     """
     Get top anime from MyAnimeList via Jikan API.
     """
-    jikan = get_jikan()
+    anilist = get_anilist()
     results = []
 
     try:
-        jikan_results = await jikan.get_top_anime(type_filter=type_filter, limit=limit)
-        
-        for anime in jikan_results:
+        anilist_results = await anilist.get_top_anime(type_filter=type_filter, limit=limit)
+
+        for anime in anilist_results:
+            synopsis = anime.get("synopsis") or ""
             results.append(SearchResult(
-                name=anime.main_title,
+                name=anime.get("name"),
                 type="anime",
-                year=str(anime.year) if anime.year else None,
-                mal_id=anime.mal_id,
-                overview=anime.synopsis[:300] + "..." if len(anime.synopsis) > 300 else anime.synopsis,
-                poster=anime.poster_url,
-                rating=anime.score,
-                genres=anime.genre_names,
-                episodes=anime.episodes,
-                status=anime.status,
+                year=str(anime.get("year")) if anime.get("year") else None,
+                mal_id=anime.get("anilist_id"),
+                overview=synopsis[:300] + "..." if len(synopsis) > 300 else synopsis,
+                poster=anime.get("poster_url"),
+                rating=anime.get("rating"),
+                genres=anime.get("genres", []),
+                episodes=anime.get("episodes"),
+                status=anime.get("status"),
             ))
 
     except Exception as e:
@@ -655,24 +628,25 @@ async def get_seasonal_anime_jikan(
     """
     Get seasonal anime from MyAnimeList via Jikan API.
     """
-    jikan = get_jikan()
+    anilist = get_anilist()
     results = []
 
     try:
-        jikan_results = await jikan.get_seasonal_anime(year=year, season=season, limit=limit)
-        
-        for anime in jikan_results:
+        anilist_results = await anilist.get_seasonal_anime(year=year, season=season, limit=limit)
+
+        for anime in anilist_results:
+            synopsis = anime.get("synopsis") or ""
             results.append(SearchResult(
-                name=anime.main_title,
+                name=anime.get("name"),
                 type="anime",
-                year=str(anime.year) if anime.year else None,
-                mal_id=anime.mal_id,
-                overview=anime.synopsis[:300] + "..." if len(anime.synopsis) > 300 else anime.synopsis,
-                poster=anime.poster_url,
-                rating=anime.score,
-                genres=anime.genre_names,
-                episodes=anime.episodes,
-                status=anime.status,
+                year=str(anime.get("year")) if anime.get("year") else None,
+                mal_id=anime.get("anilist_id"),
+                overview=synopsis[:300] + "..." if len(synopsis) > 300 else synopsis,
+                poster=anime.get("poster_url"),
+                rating=anime.get("rating"),
+                genres=anime.get("genres", []),
+                episodes=anime.get("episodes"),
+                status=anime.get("status"),
             ))
 
     except Exception as e:
@@ -680,3 +654,36 @@ async def get_seasonal_anime_jikan(
         raise HTTPException(status_code=500, detail=f"Jikan API error: {str(e)}")
 
     return results
+
+
+# Parameterized route MUST come AFTER static routes like /top and /seasonal
+@router.get("/anime/jikan/{mal_id}", response_model=SearchResult)
+async def get_anime_jikan(mal_id: int):
+    """
+    Get detailed anime information from Jikan API by MyAnimeList ID.
+    """
+    anilist = get_anilist()
+
+    try:
+        anime = await anilist.get_anime_by_id(mal_id)
+        if not anime:
+            raise HTTPException(status_code=404, detail="Anime not found")
+
+        return SearchResult(
+            name=anime.get("name"),
+            type="anime",
+            year=str(anime.get("year")) if anime.get("year") else None,
+            mal_id=anime.get("anilist_id"),
+            overview=anime.get("synopsis") or "",
+            poster=anime.get("poster_url"),
+            rating=anime.get("rating"),
+            genres=anime.get("genres", []),
+            episodes=anime.get("episodes"),
+            status=anime.get("status"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Jikan anime details error: {e}")
+        raise HTTPException(status_code=500, detail=f"Jikan API error: {str(e)}")

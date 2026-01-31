@@ -97,6 +97,28 @@ class Database:
                 -- JSON format: {"1": {"total": 10, "downloaded": [1,2,3]}, "2": {...}}
             """
         },
+        {
+            "id": 4,
+            "description": "Add Jikan metadata to anime table",
+            "sql": """
+                -- Add Jikan metadata for enriching anime information
+                ALTER TABLE anime ADD COLUMN mal_id INTEGER;
+                ALTER TABLE anime ADD COLUMN synopsis TEXT;
+                ALTER TABLE anime ADD COLUMN rating REAL;
+                ALTER TABLE anime ADD COLUMN year INTEGER;
+                ALTER TABLE anime ADD COLUMN genres TEXT;
+                ALTER TABLE anime ADD COLUMN status TEXT;
+                ALTER TABLE anime ADD COLUMN poster_url TEXT;
+            """
+        },
+        {
+            "id": 5,
+            "description": "Migrate from Jikan (mal_id) to AniList (anilist_id)",
+            "sql": """
+                -- Rename mal_id to anilist_id for AniList API integration
+                ALTER TABLE anime RENAME COLUMN mal_id TO anilist_id;
+            """
+        },
     ]
 
     def _init_database(self):
