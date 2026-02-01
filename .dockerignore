@@ -11,7 +11,6 @@ __pycache__
 venv/
 env/
 .venv/
-.env
 
 # IDE
 .idea/
@@ -20,13 +19,13 @@ env/
 *.swo
 
 # Docker
-Dockerfile
 docker-compose*.yml
-.dockerignore
 
-# Project files
+# Documentation
 *.md
-*.json
+README.md
+TODO.md
+TODO-PWA.md
 
 # GitHub
 .github/
@@ -34,3 +33,11 @@ docker-compose*.yml
 # Tests
 tests/
 *.test.py
+
+# Frontend (not needed in backend Docker image)
+frontend/
+
+# Config files not needed in container
+.env
+.env.example
+.dockerignore
