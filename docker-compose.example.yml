@@ -46,3 +46,24 @@ services:
       - /path/to/your/anime:/downloads/anime
       - /path/to/your/series:/downloads/series
       - /path/to/your/movies:/downloads/movies
+
+    networks:
+      - yuna-network
+
+  yuna-frontend:
+    image: ghcr.io/justzacca/yuna-system-frontend:latest
+    container_name: yuna-frontend
+    restart: unless-stopped
+
+    ports:
+      - "80:80"  # Web UI (http://localhost)
+
+    depends_on:
+      - yuna
+
+    networks:
+      - yuna-network
+
+networks:
+  yuna-network:
+    driver: bridge

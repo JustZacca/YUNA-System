@@ -1,0 +1,17 @@
+node_modules
+.git
+.gitignore
+.env
+.env.*
+.vscode
+*.log
+npm-debug.log*
+dist
+build
+.svelte-kit
+.DS_Store
+coverage
+.nyc_output
+*.test.js
+*.spec.js
+README.md
