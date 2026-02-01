@@ -1,12 +1,20 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { preloadData } from '$app/navigation';
+  import { page } from '$app/stores';
   import '../app.css';
   import { Snackbar } from 'm3-svelte';
   import Icon from '@iconify/svelte';
+  import { user, isAuthenticated } from '$lib/stores';
+
+  // Initialize authentication state on mount
+  onMount(async () => {
+    await user.checkAuth();
+  });
 
   function handleLogout() {
-    localStorage.removeItem('access_token');
+    user.logout();
     goto('/');
   }
 
@@ -14,60 +22,65 @@
   function handleMouseEnter(route: string) {
     preloadData(route);
   }
+
+  // Check if current page is login
+  $: isLoginPage = $page.url.pathname === '/';
 </script>
 
-<div class="app-layout">
-  <!-- Sidebar (Desktop only) -->
-  <nav class="sidebar">
-    <div class="logo">
-      <Icon icon="mdi:play-circle" width="32" />
-      <span>YUNA</span>
-    </div>
+<div class="app-layout" class:no-nav={isLoginPage || !$isAuthenticated}>
+  <!-- Sidebar (Desktop only) - Show only when authenticated and not on login page -->
+  {#if $isAuthenticated && !isLoginPage}
+    <nav class="sidebar">
+      <div class="logo">
+        <Icon icon="mdi:play-circle" width="32" />
+        <span>YUNA</span>
+      </div>
 
-    <ul class="nav-menu">
-      <li>
-        <a href="/dashboard" on:mouseenter={() => handleMouseEnter('/dashboard')} data-sveltekit-preload-data>
-          <Icon icon="mdi:home" width="24" />
-          <span>Home</span>
-        </a>
-      </li>
-      <li>
-        <a href="/search" on:mouseenter={() => handleMouseEnter('/search')} data-sveltekit-preload-data>
-          <Icon icon="mdi:magnify" width="24" />
-          <span>Cerca</span>
-        </a>
-      </li>
-      <li>
-        <a href="/anime" on:mouseenter={() => handleMouseEnter('/anime')} data-sveltekit-preload-data>
-          <Icon icon="mdi:animation-play" width="24" />
-          <span>Anime</span>
-        </a>
-      </li>
-      <li>
-        <a href="/series" on:mouseenter={() => handleMouseEnter('/series')} data-sveltekit-preload-data>
-          <Icon icon="mdi:television-classic" width="24" />
-          <span>Serie</span>
-        </a>
-      </li>
-      <li>
-        <a href="/films" on:mouseenter={() => handleMouseEnter('/films')} data-sveltekit-preload-data>
-          <Icon icon="mdi:film" width="24" />
-          <span>Film</span>
-        </a>
-      </li>
-      <li>
-        <a href="/manage" on:mouseenter={() => handleMouseEnter('/manage')} data-sveltekit-preload-data>
-          <Icon icon="mdi:cog" width="24" />
-          <span>Gestisci</span>
-        </a>
-      </li>
-    </ul>
+      <ul class="nav-menu">
+        <li>
+          <a href="/dashboard" on:mouseenter={() => handleMouseEnter('/dashboard')} data-sveltekit-preload-data>
+            <Icon icon="mdi:home" width="24" />
+            <span>Home</span>
+          </a>
+        </li>
+        <li>
+          <a href="/search" on:mouseenter={() => handleMouseEnter('/search')} data-sveltekit-preload-data>
+            <Icon icon="mdi:magnify" width="24" />
+            <span>Cerca</span>
+          </a>
+        </li>
+        <li>
+          <a href="/anime" on:mouseenter={() => handleMouseEnter('/anime')} data-sveltekit-preload-data>
+            <Icon icon="mdi:animation-play" width="24" />
+            <span>Anime</span>
+          </a>
+        </li>
+        <li>
+          <a href="/series" on:mouseenter={() => handleMouseEnter('/series')} data-sveltekit-preload-data>
+            <Icon icon="mdi:television-classic" width="24" />
+            <span>Serie</span>
+          </a>
+        </li>
+        <li>
+          <a href="/films" on:mouseenter={() => handleMouseEnter('/films')} data-sveltekit-preload-data>
+            <Icon icon="mdi:film" width="24" />
+            <span>Film</span>
+          </a>
+        </li>
+        <li>
+          <a href="/manage" on:mouseenter={() => handleMouseEnter('/manage')} data-sveltekit-preload-data>
+            <Icon icon="mdi:cog" width="24" />
+            <span>Gestisci</span>
+          </a>
+        </li>
+      </ul>
 
-    <button class="logout-btn" on:click={handleLogout}>
-      <Icon icon="mdi:logout" width="20" />
-      <span>Esci</span>
-    </button>
-  </nav>
+      <button class="logout-btn" on:click={handleLogout}>
+        <Icon icon="mdi:logout" width="20" />
+        <span>Esci</span>
+      </button>
+    </nav>
+  {/if}
 
   <!-- Main Content -->
   <div class="main-wrapper">
@@ -75,29 +88,31 @@
     <Snackbar />
   </div>
 
-  <!-- Bottom Navigation (Mobile) -->
-  <nav class="bottom-nav">
-    <a href="/dashboard" class="nav-item" data-sveltekit-preload-data>
-      <Icon icon="mdi:home" width="24" />
-      <span>Home</span>
-    </a>
-    <a href="/anime" class="nav-item" data-sveltekit-preload-data>
-      <Icon icon="mdi:animation-play" width="24" />
-      <span>Anime</span>
-    </a>
-    <a href="/series" class="nav-item" data-sveltekit-preload-data>
-      <Icon icon="mdi:television-classic" width="24" />
-      <span>Serie</span>
-    </a>
-    <a href="/films" class="nav-item" data-sveltekit-preload-data>
-      <Icon icon="mdi:film" width="24" />
-      <span>Film</span>
-    </a>
-    <a href="/manage" class="nav-item" data-sveltekit-preload-data>
-      <Icon icon="mdi:cog" width="24" />
-      <span>Gestisci</span>
-    </a>
-  </nav>
+  <!-- Bottom Navigation (Mobile) - Show only when authenticated and not on login page -->
+  {#if $isAuthenticated && !isLoginPage}
+    <nav class="bottom-nav">
+      <a href="/dashboard" class="nav-item" data-sveltekit-preload-data>
+        <Icon icon="mdi:home" width="24" />
+        <span>Home</span>
+      </a>
+      <a href="/anime" class="nav-item" data-sveltekit-preload-data>
+        <Icon icon="mdi:animation-play" width="24" />
+        <span>Anime</span>
+      </a>
+      <a href="/series" class="nav-item" data-sveltekit-preload-data>
+        <Icon icon="mdi:television-classic" width="24" />
+        <span>Serie</span>
+      </a>
+      <a href="/films" class="nav-item" data-sveltekit-preload-data>
+        <Icon icon="mdi:film" width="24" />
+        <span>Film</span>
+      </a>
+      <a href="/manage" class="nav-item" data-sveltekit-preload-data>
+        <Icon icon="mdi:cog" width="24" />
+        <span>Gestisci</span>
+      </a>
+    </nav>
+  {/if}
 </div>
 
 <style>
@@ -232,7 +247,8 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   /* Desktop Layout */
@@ -248,12 +264,22 @@
     .bottom-nav {
       display: none;
     }
+
+    /* No sidebar when not authenticated */
+    .app-layout.no-nav .main-wrapper {
+      margin-left: 0;
+    }
   }
 
   /* Mobile Layout */
   @media (max-width: 768px) {
     .main-wrapper {
       padding-bottom: 80px;
+    }
+
+    /* No bottom nav padding when not authenticated */
+    .app-layout.no-nav .main-wrapper {
+      padding-bottom: 0;
     }
   }
 </style>

@@ -264,8 +264,6 @@
     margin: 0 auto;
     padding: 24px;
     padding-bottom: 120px;
-    overflow-y: auto;
-    max-height: calc(100vh - 64px);
   }
 
   /* Loading & States */

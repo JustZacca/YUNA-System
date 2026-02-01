@@ -4,9 +4,9 @@
   import { page } from '$app/stores';
   import { user, isAuthenticated } from '$lib/stores';
   import { api } from '$lib/api';
-  import { Button, Card, LinearProgressEstimate, snackbar } from 'm3-svelte';
+  import { Button, Card, LinearProgressEstimate, snackbar, CircularProgress } from 'm3-svelte';
   import Icon from '@iconify/svelte';
-  import type { AnimeDetail } from '$lib/types';
+  import type { AnimeDetail, ProviderSearchResult } from '$lib/types';
 
   let anime: AnimeDetail | null = null;
   let loading = true;
@@ -16,6 +16,12 @@
   let showAssociateModal = false;
   let searchResults: any[] = [];
   let selectedResult: any = null;
+  
+  // Provider search state
+  let showProviderSearchModal = false;
+  let searchingProviders = false;
+  let providerResults: ProviderSearchResult[] = [];
+  let associatingProvider = false;
 
   onMount(async () => {
     await user.checkAuth();
@@ -107,6 +113,55 @@
     searchResults = [];
     selectedResult = null;
   }
+
+  async function searchProviders() {
+    if (!anime) return;
+    
+    showProviderSearchModal = true;
+    searchingProviders = true;
+    providerResults = [];
+    
+    try {
+      const cleanName = anime.name
+        .replace(/\s*\(ITA\)\s*/gi, '')
+        .replace(/\s*\(SUB ITA\)\s*/gi, '')
+        .replace(/\s*\(DUB ITA\)\s*/gi, '')
+        .trim();
+      
+      providerResults = await api.searchAnimeProviders(cleanName);
+      
+      if (providerResults.length === 0) {
+        snackbar('Nessun provider trovato', undefined, true);
+      }
+    } catch (err: any) {
+      snackbar(err.message || 'Errore nella ricerca dei provider', undefined, true);
+    } finally {
+      searchingProviders = false;
+    }
+  }
+
+  async function selectProvider(provider: ProviderSearchResult) {
+    if (!anime || !provider.url) return;
+    
+    associatingProvider = true;
+    try {
+      anime = await api.associateAnimeProvider(anime.name, provider.url);
+      snackbar('Provider associato con successo!', undefined, false);
+      closeProviderModal();
+      await loadData();
+    } catch (err: any) {
+      snackbar(err.message || 'Errore nell\'associazione del provider', undefined, true);
+    } finally {
+      associatingProvider = false;
+    }
+  }
+
+  function closeProviderModal() {
+    showProviderSearchModal = false;
+    providerResults = [];
+    searchingProviders = false;
+    associatingProvider = false;
+  }
 </script>
 
 <svelte:head>
@@ -190,6 +245,22 @@
                 {#each anime.genres as genre}
                   <span class="genre-chip">{genre}</span>
                 {/each}
+              </div>
+            {/if}
+
+            <!-- No Provider Warning -->
+            {#if !anime.link}
+              <div class="warning-banner provider-warning">
+                <Icon icon="mdi:link-variant-off" width="20" />
+                <span>Nessun provider associato</span>
+                <Button variant="tonal" onclick={searchProviders} disabled={searchingProviders}>
+                  {#if searchingProviders}
+                    <Icon icon="mdi:loading" width="18" class="spinning" />
+                  {:else}
+                    <Icon icon="mdi:magnify" width="18" />
+                  {/if}
+                  Cerca provider
+                </Button>
               </div>
             {/if}
 
@@ -322,7 +393,7 @@
   <!-- Association Modal -->
   {#if showAssociateModal}
     <div class="modal-overlay" on:click={closeModal} on:keydown={(e) => e.key === 'Escape' && closeModal()} role="button" tabindex="0">
-      <div class="modal-content" on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-modal="true">
+      <div class="modal-content" on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
         <div class="modal-header">
           <h2>Seleziona Anime</h2>
           <button class="icon-button" on:click={closeModal}>
@@ -378,6 +449,72 @@
           <Button variant="text" onclick={closeModal}>Annulla</Button>
           <Button variant="filled" onclick={confirmAssociation} disabled={!selectedResult}>
             Conferma
+          </Button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Provider Search Modal -->
+  {#if showProviderSearchModal}
+    <div class="modal-overlay" on:click={closeProviderModal} on:keydown={(e) => e.key === 'Escape' && closeProviderModal()} role="button" tabindex="0">
+      <div class="modal-content" on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+        <div class="modal-header">
+          <h2>Cerca provider per "{anime?.name}"</h2>
+          <button class="icon-button" on:click={closeProviderModal}>
+            <Icon icon="mdi:close" width="24" />
+          </button>
+        </div>
+
+        <div class="modal-body">
+          {#if searchingProviders}
+            <div class="modal-loading">
+              <CircularProgress />
+              <p>Ricerca in corso sui provider disponibili...</p>
+            </div>
+          {:else if providerResults.length > 0}
+            <p class="modal-subtitle">Trovati {providerResults.length} risultati</p>
+            <div class="results-list">
+              {#each providerResults as result}
+                <button
+                  class="result-item provider-result"
+                  on:click={() => selectProvider(result)}
+                  disabled={associatingProvider}
+                >
+                  {#if result.poster}
+                    <img src={result.poster} alt={result.title} class="result-poster" />
+                  {:else}
+                    <div class="result-poster-placeholder">
+                      <Icon icon="mdi:image-off" width="24" />
+                    </div>
+                  {/if}
+
+                  <div class="result-info">
+                    <h3>{result.title}</h3>
+                    <div class="result-meta">
+                      <span class="provider-badge">{result.provider}</span>
+                      {#if result.year}<span><Icon icon="mdi:calendar" width="14" /> {result.year}</span>{/if}
+                      {#if result.episodes}<span><Icon icon="mdi:play-box-multiple" width="14" /> {result.episodes} ep</span>{/if}
+                    </div>
+                  </div>
+
+                  <div class="action-arrow">
+                    <Icon icon="mdi:chevron-right" width="24" />
+                  </div>
+                </button>
+              {/each}
+            </div>
+          {:else}
+            <div class="modal-empty">
+              <Icon icon="mdi:magnify-close" width="48" color="var(--m3c-outline)" />
+              <p>Nessun provider trovato</p>
+            </div>
+          {/if}
+        </div>
+
+        <div class="modal-footer">
+          <Button variant="text" onclick={closeProviderModal} disabled={associatingProvider}>
+            {associatingProvider ? 'Associazione in corso...' : 'Chiudi'}
           </Button>
         </div>
       </div>
@@ -440,8 +577,6 @@
     margin: 0 auto;
     padding: 24px;
     padding-bottom: 120px;
-    overflow-y: auto;
-    max-height: calc(100vh - 64px);
   }
 
   .loading-container {
@@ -588,6 +723,11 @@
     color: var(--m3c-on-error-container);
     border-radius: var(--m3-shape-medium);
     font-size: 14px;
+  }
+
+  .warning-banner.provider-warning {
+    background: var(--m3c-tertiary-container);
+    color: var(--m3c-on-tertiary-container);
   }
 
   /* Content Sections */
@@ -947,6 +1087,70 @@
     gap: 12px;
     padding: 16px 24px;
     border-top: 1px solid var(--m3c-outline-variant);
+  }
+
+  /* Provider search modal specific styles */
+  .modal-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 48px 24px;
+    text-align: center;
+  }
+
+  .modal-loading p {
+    font-size: 14px;
+    color: var(--m3c-on-surface-variant);
+    margin: 0;
+  }
+
+  .modal-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 48px 24px;
+    text-align: center;
+  }
+
+  .modal-empty p {
+    font-size: 14px;
+    color: var(--m3c-on-surface-variant);
+    margin: 0;
+  }
+
+  .result-item.provider-result {
+    border: 1px solid var(--m3c-outline-variant);
+  }
+
+  .result-item.provider-result:hover {
+    background: var(--m3c-surface-container-high);
+    border-color: var(--m3c-primary);
+  }
+
+  .result-item.provider-result:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .provider-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    background: var(--m3c-primary-container);
+    color: var(--m3c-on-primary-container);
+    border-radius: var(--m3-shape-small);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .action-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--m3c-on-surface-variant);
   }
 
   :global(.spinning) {

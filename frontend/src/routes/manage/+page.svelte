@@ -457,12 +457,13 @@
       role="button"
       tabindex="0"
     >
-      <div 
+      <div
         class="modal-content delete-modal"
         on:click={(e) => e.stopPropagation()}
         on:keydown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        tabindex="-1"
       >
         <div class="modal-header">
           <Icon icon="mdi:alert-circle" width="48" color="var(--m3c-error)" />
@@ -589,10 +590,9 @@
     max-width: 1400px;
     margin: 0 auto;
     padding: 24px 16px;
+    padding-bottom: 120px;
     width: 100%;
     box-sizing: border-box;
-    overflow-y: auto;
-    max-height: calc(100vh - 128px);
   }
 
   .container {
@@ -611,8 +611,6 @@
     border: 1px solid var(--m3c-outline-variant);
     border-radius: var(--m3-shape-large);
     padding: 20px;
-    max-height: calc(100vh - 200px);
-    overflow-y: auto;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   }
 
@@ -1056,7 +1054,7 @@
   @media (max-width: 968px) {
     .main-content {
       padding: 16px 12px;
-      max-height: calc(100vh - 140px);
+      padding-bottom: 120px;
     }
 
     .container {
@@ -1065,7 +1063,6 @@
     }
 
     .media-list-panel {
-      max-height: 350px;
       padding: 16px;
     }
 
@@ -1147,7 +1144,6 @@
     }
 
     .media-list-panel {
-      max-height: 300px;
       padding: 12px;
     }
 

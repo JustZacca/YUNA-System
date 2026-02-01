@@ -14,7 +14,10 @@ import type {
   SeriesListResponse,
   SeriesDetail,
   FilmListResponse,
-  FilmDetail
+  FilmDetail,
+  ProviderSearchResult,
+  AddFromMetadataRequest,
+  AssociateProviderRequest
 } from './types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -174,12 +177,6 @@ class YunaApiClient {
 		});
 	}
 
-  async deleteAnime(name: string): Promise<void> {
-    return this.request<void>(`/anime/${encodeURIComponent(name)}`, {
-      method: 'DELETE',
-    });
-  }
-
   async downloadAnimeEpisodes(name: string, episodes?: number[]): Promise<any> {
     return this.request<any>(`/anime/${encodeURIComponent(name)}/download`, {
       method: 'POST',
@@ -250,6 +247,61 @@ class YunaApiClient {
   async deleteFilm(name: string): Promise<{ success: boolean; message: string }> {
     return this.request<{ success: boolean; message: string }>(`/films/${encodeURIComponent(name)}`, {
       method: 'DELETE',
+    });
+  }
+
+  // Add content from metadata providers (without provider)
+  async addAnimeFromAnilist(anilistId: number): Promise<AnimeDetail> {
+    return this.request<AnimeDetail>('/anime/from-anilist', {
+      method: 'POST',
+      body: JSON.stringify({ anilist_id: anilistId }),
+    });
+  }
+
+  async addSeriesFromTmdb(tmdbId: number): Promise<SeriesDetail> {
+    return this.request<SeriesDetail>('/series/from-tmdb', {
+      method: 'POST',
+      body: JSON.stringify({ tmdb_id: tmdbId }),
+    });
+  }
+
+  async addFilmFromTmdb(tmdbId: number): Promise<FilmDetail> {
+    return this.request<FilmDetail>('/films/from-tmdb', {
+      method: 'POST',
+      body: JSON.stringify({ tmdb_id: tmdbId }),
+    });
+  }
+
+  // Search providers
+  async searchAnimeProviders(query: string): Promise<ProviderSearchResult[]> {
+    const params = new URLSearchParams({ q: query });
+    return this.request<ProviderSearchResult[]>(`/providers/search/anime?${params}`);
+  }
+
+  async searchMediaProviders(query: string, type: 'series' | 'film'): Promise<ProviderSearchResult[]> {
+    const params = new URLSearchParams({ q: query, type });
+    return this.request<ProviderSearchResult[]>(`/providers/search/media?${params}`);
+  }
+
+  // Associate provider to existing content
+  async associateAnimeProvider(animeName: string, providerUrl: string): Promise<AnimeDetail> {
+    return this.request<AnimeDetail>(`/anime/${encodeURIComponent(animeName)}/associate-provider`, {
+      method: 'POST',
+      body: JSON.stringify({ provider_url: providerUrl }),
+    });
+  }
+
+  async associateSeriesProvider(seriesName: string, provider: string, mediaId: number, slug?: string): Promise<SeriesDetail> {
+    return this.request<SeriesDetail>(`/series/${encodeURIComponent(seriesName)}/associate-provider`, {
+      method: 'POST',
+      body: JSON.stringify({ provider, media_id: mediaId, slug }),
+    });
+  }
+
+  async associateFilmProvider(filmName: string, provider: string, mediaId: number, slug?: string): Promise<FilmDetail> {
+    return this.request<FilmDetail>(`/films/${encodeURIComponent(filmName)}/associate-provider`, {
+      method: 'POST',
+      body: JSON.stringify({ provider, media_id: mediaId, slug }),
     });
   }
 }

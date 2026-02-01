@@ -1,5 +1,11 @@
 /* M3 Svelte Theme - YUNA Purple Dark */
 @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
+@import "m3-svelte/etc/styles.css";
+
+/* M3 Density function - identity function for component sizing */
+@function --m3-density(--size) {
+  result: var(--size);
+}
 
 /* M3 Color Tokens - Dark Theme */
 :root {
@@ -154,4 +160,19 @@ body {
   :root {
     --m3v-bottom-offset: 80px;
   }
+}
+
+/* M3-Svelte TextField fixes */
+.m3-container:has(> input) {
+  min-width: 0;
+  height: 3.5rem;
+}
+
+/* Full-width input wrapper utility */
+.input-full-width {
+  width: 100%;
+}
+
+.input-full-width > .m3-container {
+  width: 100%;
 }

@@ -133,7 +133,7 @@
                 <span class="stat-name">Serie TV</span>
               </div>
             </Card>
-            <Card variant="elevated" onclick={() => goto('/movies')}>
+            <Card variant="elevated" onclick={() => goto('/films')}>
               <div class="stat-card">
                 <Icon icon="mdi:movie-open" width="32" color="var(--m3c-tertiary)" />
                 <span class="stat-number">{stats.films_count}</span>
@@ -266,8 +266,6 @@
     padding-bottom: 140px;
     width: 100%;
     box-sizing: border-box;
-    overflow-y: auto;
-    max-height: calc(100vh - 64px);
   }
 
   .loading-container,

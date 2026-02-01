@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { api } from '$lib/api';
-  import { Button, Card, TextFieldOutlined, LinearProgressEstimate, snackbar } from 'm3-svelte';
+  import { Button, Card, TextFieldOutlined, LinearProgressEstimate, snackbar, CircularProgress } from 'm3-svelte';
   import Icon from '@iconify/svelte';
   import type { SearchResult, SearchResponse } from '$lib/types';
 
@@ -10,6 +10,9 @@
   let results: SearchResponse | null = null;
   let loading = false;
   let hasSearched = false;
+  let showAddDialog = false;
+  let selectedResult: SearchResult | null = null;
+  let addingToCollection = false;
 
   async function handleSearch() {
     if (!searchQuery.trim()) {
@@ -37,13 +40,58 @@
   }
 
   function selectResult(result: SearchResult) {
-    if (result.type === 'anime' && result.provider_url) {
-      // For anime, we could add to library
+    selectedResult = result;
+    
+    // Check if it's a metadata result (AniList or TMDB) without provider
+    const hasAnilistId = result.anilist_id || result.mal_id;
+    const hasTmdbId = result.tmdb_id;
+    const hasProviderUrl = result.provider_url;
+    
+    // Priority: metadata without provider -> show dialog to add to collection
+    if ((hasAnilistId || hasTmdbId) && !hasProviderUrl) {
+      showAddDialog = true;
+    } 
+    // Provider URL present -> direct add (old behavior for anime)
+    else if (hasProviderUrl && result.type === 'anime') {
       goto(`/anime/add?url=${encodeURIComponent(result.provider_url)}`);
-    } else if (result.mal_id) {
-      goto(`/anime/jikan/${result.mal_id}`);
-    } else if (result.tmdb_id) {
-      goto(`/${result.type === 'film' ? 'movies' : 'series'}/tmdb/${result.tmdb_id}`);
+    }
+  }
+
+  function closeDialog() {
+    showAddDialog = false;
+    selectedResult = null;
+  }
+
+  function handleDialogKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      closeDialog();
+    }
+  }
+
+  async function addToCollection() {
+    if (!selectedResult) return;
+    
+    addingToCollection = true;
+    try {
+      if (selectedResult.type === 'anime' && (selectedResult.anilist_id || selectedResult.mal_id)) {
+        const anilistId = selectedResult.anilist_id || selectedResult.mal_id;
+        const anime = await api.addAnimeFromAnilist(anilistId);
+        snackbar('Anime aggiunto alla collezione!', undefined, false);
+        goto(`/anime/${encodeURIComponent(anime.name)}`);
+      } else if (selectedResult.type === 'series' && selectedResult.tmdb_id) {
+        const series = await api.addSeriesFromTmdb(selectedResult.tmdb_id);
+        snackbar('Serie aggiunta alla collezione!', undefined, false);
+        goto(`/series/${encodeURIComponent(series.name)}`);
+      } else if (selectedResult.type === 'film' && selectedResult.tmdb_id) {
+        const film = await api.addFilmFromTmdb(selectedResult.tmdb_id);
+        snackbar('Film aggiunto alla collezione!', undefined, false);
+        goto(`/films/${encodeURIComponent(film.name)}`);
+      }
+      closeDialog();
+    } catch (err: any) {
+      snackbar(err.message || 'Errore nell\'aggiunta alla collezione', undefined, true);
+    } finally {
+      addingToCollection = false;
     }
   }
 
@@ -218,6 +266,47 @@
   </main>
 </div>
 
+<!-- Dialog for adding to collection -->
+{#if showAddDialog && selectedResult}
+  <div class="modal-overlay" role="presentation" on:click={closeDialog} on:keydown={handleDialogKeydown}>
+    <div class="modal-content" role="dialog" tabindex="-1" on:click|stopPropagation on:keydown|stopPropagation>
+      <div class="modal-header">
+        <h3>{selectedResult.name}</h3>
+        <button class="close-button" on:click={closeDialog} aria-label="Chiudi">
+          <Icon icon="mdi:close" width="24" />
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        {#if selectedResult.poster}
+          <img src={selectedResult.poster} alt={selectedResult.name} class="modal-poster" />
+        {/if}
+        <p class="modal-description">
+          Questo contenuto verrà aggiunto alla collezione senza provider associato.
+          Potrai associarlo successivamente dalla pagina dei dettagli.
+        </p>
+        
+        {#if selectedResult.overview}
+          <p class="modal-overview">{selectedResult.overview}</p>
+        {/if}
+      </div>
+      
+      <div class="dialog-actions">
+        <Button variant="text" onclick={closeDialog} disabled={addingToCollection}>
+          Annulla
+        </Button>
+        <Button variant="filled" onclick={addToCollection} disabled={addingToCollection}>
+          {#if addingToCollection}
+            <CircularProgress size="small" />
+          {:else}
+            Aggiungi alla collezione
+          {/if}
+        </Button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .search-page {
     display: flex;
@@ -275,7 +364,7 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 16px;
-    overflow-y: auto;
+    padding-bottom: 120px;
     width: 100%;
     box-sizing: border-box;
   }
@@ -296,13 +385,13 @@
   .search-input-wrapper {
     display: flex;
     gap: 12px;
-    align-items: flex-end;
+    align-items: center;
     width: 100%;
   }
 
   .field {
     flex: 1;
-    min-width: 200px;
+    min-width: 0;
   }
 
   .field :global(.m3-container) {
@@ -630,6 +719,119 @@
 
     .result-title {
       font-size: 12px;
+    }
+  }
+
+  /* Modal styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+  }
+
+  .modal-content {
+    background: var(--m3c-surface-container-high);
+    border-radius: var(--m3-shape-large);
+    max-width: 500px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-header {
+    padding: 24px 24px 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--m3c-outline-variant);
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--m3c-on-surface);
+    flex: 1;
+    line-height: 1.4;
+  }
+
+  .close-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: none;
+    color: var(--m3c-on-surface);
+    cursor: pointer;
+    border-radius: var(--m3-shape-full);
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+
+  .close-button:hover {
+    background: var(--m3c-surface-container-highest);
+  }
+
+  .modal-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .modal-poster {
+    width: 100%;
+    max-width: 200px;
+    height: auto;
+    border-radius: var(--m3-shape-medium);
+    align-self: center;
+  }
+
+  .modal-description {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--m3c-on-surface-variant);
+    margin: 0;
+  }
+
+  .modal-overview {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--m3c-on-surface-variant);
+    margin: 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--m3c-outline-variant);
+  }
+
+  .dialog-actions {
+    padding: 16px 24px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid var(--m3c-outline-variant);
+  }
+
+  @media (max-width: 768px) {
+    .modal-content {
+      max-width: 100%;
+    }
+
+    .modal-header,
+    .modal-body,
+    .dialog-actions {
+      padding: 16px;
     }
   }
 

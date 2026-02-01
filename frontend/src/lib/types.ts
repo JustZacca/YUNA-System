@@ -169,3 +169,29 @@ export interface SystemHealth {
   api_version: string;
   uptime: number;
 }
+
+// Provider search results
+export interface ProviderSearchResult {
+  title: string;
+  provider: string;
+  url?: string;
+  poster?: string;
+  slug?: string;
+  media_id?: number;
+  episodes?: number;
+  year?: number;
+  type?: string;
+}
+
+// Add content requests
+export interface AddFromMetadataRequest {
+  anilist_id?: number;
+  tmdb_id?: number;
+}
+
+export interface AssociateProviderRequest {
+  provider_url?: string;
+  provider?: string;
+  provider_slug?: string;
+  media_id?: number;
+}

@@ -4,9 +4,9 @@
   import { page } from '$app/stores';
   import { user, isAuthenticated } from '$lib/stores';
   import { api } from '$lib/api';
-  import { Button, Card, LinearProgressEstimate, snackbar } from 'm3-svelte';
+  import { Button, Card, LinearProgressEstimate, snackbar, CircularProgress } from 'm3-svelte';
   import Icon from '@iconify/svelte';
-  import type { FilmDetail } from '$lib/types';
+  import type { FilmDetail, ProviderSearchResult } from '$lib/types';
 
   let film: FilmDetail | null = null;
   let loading = true;
@@ -15,6 +15,12 @@
   let showAssociateModal = false;
   let searchResults: any[] = [];
   let selectedResult: any = null;
+
+  // Provider search state
+  let showProviderSearchModal = false;
+  let searchingProviders = false;
+  let providerResults: ProviderSearchResult[] = [];
+  let associatingProvider = false;
 
   const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
@@ -91,6 +97,55 @@
     searchResults = [];
     selectedResult = null;
   }
+
+  async function searchProviders() {
+    if (!film) return;
+    
+    showProviderSearchModal = true;
+    searchingProviders = true;
+    providerResults = [];
+    
+    try {
+      const cleanName = film.name.replace(/\s*\(\d{4}\)\s*/g, '').trim();
+      providerResults = await api.searchMediaProviders(cleanName, 'film');
+      
+      if (providerResults.length === 0) {
+        snackbar('Nessun provider trovato', undefined, true);
+      }
+    } catch (err: any) {
+      snackbar(err.message || 'Errore nella ricerca dei provider', undefined, true);
+    } finally {
+      searchingProviders = false;
+    }
+  }
+
+  async function selectProvider(provider: ProviderSearchResult) {
+    if (!film || !provider.media_id) return;
+    
+    associatingProvider = true;
+    try {
+      film = await api.associateFilmProvider(
+        film.name,
+        provider.provider,
+        provider.media_id,
+        provider.slug
+      );
+      snackbar('Provider associato con successo!', undefined, false);
+      closeProviderModal();
+      await loadData();
+    } catch (err: any) {
+      snackbar(err.message || 'Errore nell\'associazione del provider', undefined, true);
+    } finally {
+      associatingProvider = false;
+    }
+  }
+
+  function closeProviderModal() {
+    showProviderSearchModal = false;
+    providerResults = [];
+    searchingProviders = false;
+    associatingProvider = false;
+  }
 </script>
 
 <svelte:head>
@@ -143,6 +198,26 @@
 
           <div class="header-info">
             <h2 class="film-title">{film.name}</h2>
+
+            {#if !film.provider}
+              <div class="associate-banner provider-warning">
+                <Icon icon="mdi:link-variant-off" width="20" />
+                <span>Nessun provider associato</span>
+                <Button 
+                  variant="filled" 
+                  onclick={searchProviders} 
+                  disabled={searchingProviders}
+                >
+                  {#if searchingProviders}
+                    <Icon icon="mdi:loading" width="16" class="spinning" />
+                    Ricerca in corso...
+                  {:else}
+                    <Icon icon="mdi:magnify" width="16" />
+                    Cerca provider
+                  {/if}
+                </Button>
+              </div>
+            {/if}
 
             {#if !film.tmdb_id}
               <div class="associate-banner">
@@ -235,12 +310,13 @@
       role="button"
       tabindex="0"
     >
-      <div 
-        class="modal-content" 
+      <div
+        class="modal-content"
         on:click={(e) => e.stopPropagation()}
         on:keydown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        tabindex="-1"
       >
         <div class="modal-header">
           <h2 class="modal-title">Seleziona Film da Associare</h2>
@@ -330,6 +406,71 @@
     </div>
   {/if}
 
+  <!-- Provider Search Modal -->
+  {#if showProviderSearchModal}
+    <div class="modal-overlay" on:click={closeProviderModal} on:keydown={(e) => e.key === 'Escape' && closeProviderModal()} role="presentation">
+      <div class="modal-content" on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+        <div class="modal-header">
+          <h2>Cerca provider per "{film?.name}"</h2>
+          <button class="icon-button" on:click={closeProviderModal}>
+            <Icon icon="mdi:close" width="24" />
+          </button>
+        </div>
+
+        <div class="modal-body">
+          {#if searchingProviders}
+            <div class="modal-loading">
+              <CircularProgress />
+              <p>Ricerca in corso sui provider disponibili...</p>
+            </div>
+          {:else if providerResults.length > 0}
+            <p class="modal-subtitle">Trovati {providerResults.length} risultati</p>
+            <div class="results-list">
+              {#each providerResults as result}
+                <button
+                  class="result-item provider-result"
+                  on:click={() => selectProvider(result)}
+                  disabled={associatingProvider}
+                >
+                  {#if result.poster}
+                    <img src={result.poster} alt={result.title} class="result-poster" />
+                  {:else}
+                    <div class="result-poster-placeholder">
+                      <Icon icon="mdi:image-off" width="24" />
+                    </div>
+                  {/if}
+
+                  <div class="result-info">
+                    <h3>{result.title}</h3>
+                    <div class="result-meta">
+                      <span class="provider-badge">{result.provider}</span>
+                      {#if result.year}<span><Icon icon="mdi:calendar" width="14" /> {result.year}</span>{/if}
+                    </div>
+                  </div>
+
+                  <div class="action-arrow">
+                    <Icon icon="mdi:chevron-right" width="24" />
+                  </div>
+                </button>
+              {/each}
+            </div>
+          {:else}
+            <div class="modal-empty">
+              <Icon icon="mdi:magnify-close" width="48" color="var(--m3c-outline)" />
+              <p>Nessun provider trovato</p>
+            </div>
+          {/if}
+        </div>
+
+        <div class="modal-footer">
+          <Button variant="text" onclick={closeProviderModal} disabled={associatingProvider}>
+            {associatingProvider ? 'Associazione in corso...' : 'Chiudi'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
 </div>
 
 <style>
@@ -386,8 +527,6 @@
     padding: 24px 20px;
     padding-bottom: 140px;
     box-sizing: border-box;
-    overflow-y: auto;
-    max-height: calc(100vh - 64px);
   }
 
   .loading-container,
@@ -494,6 +633,11 @@
     color: var(--m3c-on-warning-container);
     border-radius: var(--m3-shape-medium);
     font-size: 14px;
+  }
+
+  .associate-banner.provider-warning {
+    background: var(--m3c-tertiary-container);
+    color: var(--m3c-on-tertiary-container);
   }
 
   .section {
@@ -773,5 +917,78 @@
     gap: 12px;
     padding: 16px 24px;
     border-top: 1px solid var(--m3c-outline-variant);
+  }
+
+  /* Provider search modal specific styles */
+  .modal-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 48px 24px;
+    text-align: center;
+  }
+
+  .modal-loading p {
+    font-size: 14px;
+    color: var(--m3c-on-surface-variant);
+    margin: 0;
+  }
+
+  .modal-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 48px 24px;
+    text-align: center;
+  }
+
+  .modal-empty p {
+    font-size: 14px;
+    color: var(--m3c-on-surface-variant);
+    margin: 0;
+  }
+
+  .result-item.provider-result {
+    border: 1px solid var(--m3c-outline-variant);
+  }
+
+  .result-item.provider-result:hover {
+    background: var(--m3c-surface-container-high);
+    border-color: var(--m3c-primary);
+  }
+
+  .result-item.provider-result:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .provider-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    background: var(--m3c-primary-container);
+    color: var(--m3c-on-primary-container);
+    border-radius: var(--m3-shape-small);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .action-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--m3c-on-surface-variant);
+  }
+
+  :global(.spinning) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 </style>

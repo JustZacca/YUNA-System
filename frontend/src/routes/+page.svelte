@@ -169,7 +169,7 @@
     width: 100%;
   }
 
-  :global(.field .m3-container) {
+  .field :global(.m3-container) {
     width: 100%;
   }
 </style>
