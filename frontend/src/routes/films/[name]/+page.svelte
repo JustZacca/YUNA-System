@@ -40,7 +40,7 @@
     error = null;
 
     try {
-      const name = decodeURIComponent($page.params.name);
+      const name = decodeURIComponent($page.params.name || '');
       film = await api.getFilmDetail(name);
     } catch (err: any) {
       error = err.message || 'Errore nel caricamento dei dettagli';
@@ -420,7 +420,7 @@
         <div class="modal-body">
           {#if searchingProviders}
             <div class="modal-loading">
-              <CircularProgress />
+              <CircularProgress percent={50} />
               <p>Ricerca in corso sui provider disponibili...</p>
             </div>
           {:else if providerResults.length > 0}
@@ -899,6 +899,7 @@
     color: var(--m3c-on-surface-variant);
     margin: 4px 0 0 0;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;

@@ -53,7 +53,7 @@
     } 
     // Provider URL present -> direct add (old behavior for anime)
     else if (hasProviderUrl && result.type === 'anime') {
-      goto(`/anime/add?url=${encodeURIComponent(result.provider_url)}`);
+      goto(`/anime/add?url=${encodeURIComponent(result.provider_url || '')}`);
     }
   }
 
@@ -75,6 +75,7 @@
     try {
       if (selectedResult.type === 'anime' && (selectedResult.anilist_id || selectedResult.mal_id)) {
         const anilistId = selectedResult.anilist_id || selectedResult.mal_id;
+        if (!anilistId) return;
         const anime = await api.addAnimeFromAnilist(anilistId);
         snackbar('Anime aggiunto alla collezione!', undefined, false);
         goto(`/anime/${encodeURIComponent(anime.name)}`);
@@ -297,7 +298,7 @@
         </Button>
         <Button variant="filled" onclick={addToCollection} disabled={addingToCollection}>
           {#if addingToCollection}
-            <CircularProgress size="small" />
+            <CircularProgress percent={50} size={20} />
           {:else}
             Aggiungi alla collezione
           {/if}

@@ -7,6 +7,7 @@
   import { Snackbar } from 'm3-svelte';
   import Icon from '@iconify/svelte';
   import { user, isAuthenticated } from '$lib/stores';
+  import InstallButton from '$lib/components/InstallButton.svelte';
 
   // Initialize authentication state on mount
   onMount(async () => {
@@ -75,10 +76,13 @@
         </li>
       </ul>
 
-      <button class="logout-btn" on:click={handleLogout}>
-        <Icon icon="mdi:logout" width="20" />
-        <span>Esci</span>
-      </button>
+      <div class="sidebar-footer">
+        <InstallButton />
+        <button class="logout-btn" on:click={handleLogout}>
+          <Icon icon="mdi:logout" width="20" />
+          <span>Esci</span>
+        </button>
+      </div>
     </nav>
   {/if}
 
@@ -182,6 +186,13 @@
   .nav-menu a:hover {
     background: var(--m3c-surface-container);
     color: var(--m3c-on-surface);
+  }
+
+  .sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: auto;
   }
 
   .logout-btn {

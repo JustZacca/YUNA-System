@@ -36,7 +36,7 @@
     loading = true;
     error = null;
     try {
-      const name = decodeURIComponent($page.params.name);
+      const name = decodeURIComponent($page.params.name || '');
       anime = await api.getAnimeDetail(name);
     } catch (err: any) {
       error = err.message || 'Errore nel caricamento dei dettagli';
@@ -469,7 +469,7 @@
         <div class="modal-body">
           {#if searchingProviders}
             <div class="modal-loading">
-              <CircularProgress />
+              <CircularProgress percent={50} />
               <p>Ricerca in corso sui provider disponibili...</p>
             </div>
           {:else if providerResults.length > 0}
