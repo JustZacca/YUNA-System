@@ -9,6 +9,7 @@
   let animeList: any = null;
   let loading = true;
   let error: string | null = null;
+  let gridSize: 'small' | 'medium' | 'large' = 'medium';
 
   onMount(async () => {
     await user.checkAuth();
@@ -38,13 +39,25 @@
   function goToSearch() {
     goto('/search');
   }
+
+  function getProgressPercent(downloaded: number, total: number): number {
+    if (!total || total === 0) return 0;
+    return Math.min(100, (downloaded / total) * 100);
+  }
+
+  function getProgressColor(downloaded: number, total: number): string {
+    const percent = getProgressPercent(downloaded, total);
+    if (percent >= 100) return 'var(--m3c-primary)';
+    if (percent >= 50) return 'var(--m3c-tertiary)';
+    return 'var(--m3c-secondary)';
+  }
 </script>
 
 <svelte:head>
   <title>YUNA - Anime</title>
 </svelte:head>
 
-<div class="anime-page">
+<div class="library-page">
   <!-- Top Bar -->
   <header class="top-bar">
     <div class="top-bar-content">
@@ -63,75 +76,133 @@
         <p>Caricamento...</p>
       </div>
     {:else if error}
-      <div class="error-container">
+      <div class="state-container">
         <Card variant="outlined">
-          <div class="error-content">
+          <div class="state-content">
             <Icon icon="mdi:alert-circle" width="48" color="var(--m3c-error)" />
+            <h3>Errore</h3>
             <p>{error}</p>
             <Button variant="filled" onclick={loadData}>Riprova</Button>
           </div>
         </Card>
       </div>
     {:else if animeList && animeList.items.length > 0}
-      <section class="anime-section">
+      <section class="library-section">
         <div class="section-header">
-          <h2 class="section-title">I Miei Anime</h2>
-          <span class="section-count">{animeList.total} titoli</span>
+          <div class="section-header-left">
+            <h2 class="section-title">La Mia Libreria</h2>
+            <span class="section-count">{animeList.total} {animeList.total === 1 ? 'anime' : 'anime'}</span>
+          </div>
+          <div class="size-selector">
+            <button
+              class="size-btn"
+              class:active={gridSize === 'small'}
+              on:click={() => gridSize = 'small'}
+              title="Compatto"
+            >
+              <Icon icon="mdi:view-grid" width="20" />
+            </button>
+            <button
+              class="size-btn"
+              class:active={gridSize === 'medium'}
+              on:click={() => gridSize = 'medium'}
+              title="Normale"
+            >
+              <Icon icon="mdi:view-grid-outline" width="20" />
+            </button>
+            <button
+              class="size-btn"
+              class:active={gridSize === 'large'}
+              on:click={() => gridSize = 'large'}
+              title="Grande"
+            >
+              <Icon icon="mdi:view-module" width="20" />
+            </button>
+          </div>
         </div>
 
-        <div class="anime-grid">
+        <div class="media-grid" class:grid-small={gridSize === 'small'} class:grid-medium={gridSize === 'medium'} class:grid-large={gridSize === 'large'}>
           {#each animeList.items as anime}
-            <Card variant="filled" onclick={() => goto(`/anime/${encodeURIComponent(anime.name)}`)}>
-              <div class="anime-card">
+            <button class="media-card" on:click={() => goto(`/anime/${encodeURIComponent(anime.name)}`)}>
+              <!-- Poster -->
+              <div class="poster-container">
                 {#if anime.poster_url || anime.poster}
                   <img
                     src={anime.poster_url || anime.poster}
                     alt={anime.name}
-                    class="anime-poster"
+                    class="poster"
                     loading="lazy"
                   />
                 {:else}
-                  <div class="anime-poster-placeholder">
-                    <Icon icon="mdi:image-off" width="48" />
+                  <div class="poster-placeholder">
+                    <Icon icon="mdi:animation-play" width="48" />
                   </div>
                 {/if}
-                <div class="anime-info">
-                  <h3 class="anime-title">{anime.name}</h3>
-                  <div class="anime-meta">
-                    <span class="anime-episodes">
-                      <Icon icon="mdi:play-box-multiple" width="16" />
-                      {anime.episodes_downloaded}/{anime.episodes_total}
-                    </span>
-                    {#if anime.rating}
-                      <span class="anime-rating">
-                        <Icon icon="mdi:star" width="16" />
-                        {anime.rating.toFixed(1)}
-                      </span>
-                    {/if}
+
+                <!-- Rating Badge -->
+                {#if anime.rating}
+                  <div class="rating-badge">
+                    <Icon icon="mdi:star" width="14" />
+                    <span>{anime.rating.toFixed(1)}</span>
                   </div>
+                {/if}
+
+                <!-- Status Badge (if airing) -->
+                {#if anime.status === 'Releasing'}
+                  <div class="status-badge airing">
+                    <Icon icon="mdi:broadcast" width="12" />
+                    In onda
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Info Section -->
+              <div class="media-info">
+                <h3 class="media-title">{anime.name}</h3>
+
+                <!-- Year and Genres -->
+                <div class="media-subtitle">
+                  {#if anime.year}
+                    <span>{anime.year}</span>
+                  {/if}
                   {#if anime.genres && anime.genres.length > 0}
-                    <div class="anime-genres">
-                      {#each anime.genres.slice(0, 2) as genre}
-                        <span class="genre-chip">{genre}</span>
-                      {/each}
-                    </div>
+                    <span class="subtitle-separator">•</span>
+                    <span>{anime.genres.slice(0, 2).join(', ')}</span>
                   {/if}
                 </div>
+
+                <!-- Episodes Progress -->
+                <div class="progress-section">
+                  <div class="progress-header">
+                    <span class="progress-label">Episodi</span>
+                    <span class="progress-value">
+                      {anime.episodes_downloaded}
+                      <span class="progress-separator">/</span>
+                      {anime.episodes_total || '?'}
+                    </span>
+                  </div>
+                  <div class="progress-bar">
+                    <div
+                      class="progress-fill"
+                      style="width: {getProgressPercent(anime.episodes_downloaded, anime.episodes_total)}%; background: {getProgressColor(anime.episodes_downloaded, anime.episodes_total)}"
+                    ></div>
+                  </div>
+                </div>
               </div>
-            </Card>
+            </button>
           {/each}
         </div>
       </section>
     {:else}
-      <div class="empty-state">
+      <div class="state-container">
         <Card variant="outlined">
-          <div class="empty-content">
+          <div class="state-content">
             <Icon icon="mdi:animation-play-outline" width="64" color="var(--m3c-outline)" />
             <h3>Nessun anime</h3>
             <p>Inizia ad aggiungere anime alla tua libreria</p>
             <Button variant="filled" onclick={goToSearch}>
               <Icon icon="mdi:magnify" width="20" />
-              Cerca
+              Cerca anime
             </Button>
           </div>
         </Card>
@@ -141,10 +212,9 @@
 </div>
 
 <style>
-  .anime-page {
+  /* Page Layout */
+  .library-page {
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
     background: var(--m3c-surface);
   }
 
@@ -158,9 +228,9 @@
   }
 
   .top-bar-content {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 12px 16px;
+    padding: 12px 24px;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -193,57 +263,78 @@
 
   /* Main Content */
   .main-content {
-    flex: 1;
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
-    width: 100%;
-    padding: 16px;
-    padding-bottom: 80px;
+    padding: 24px;
+    padding-bottom: 120px;
+    overflow-y: auto;
+    max-height: calc(100vh - 64px);
   }
 
-  /* Loading */
+  /* Loading & States */
   .loading-container {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 16px;
-    padding: 48px 16px;
+    padding: 64px 24px;
     text-align: center;
     color: var(--m3c-on-surface-variant);
   }
 
-  /* Error */
-  .error-container {
+  .state-container {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 48px 16px;
+    padding: 64px 24px;
   }
 
-  .error-content {
+  .state-content {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 16px;
     text-align: center;
-    padding: 24px;
+    padding: 48px 32px;
   }
 
-  /* Anime Section */
-  .anime-section {
+  .state-content h3 {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--m3c-on-surface);
+    margin: 0;
+  }
+
+  .state-content p {
+    font-size: 14px;
+    color: var(--m3c-on-surface-variant);
+    margin: 0;
+    max-width: 280px;
+  }
+
+  /* Section */
+  .library-section {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 24px;
   }
 
   .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .section-header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
   }
 
   .section-title {
-    font-size: 20px;
+    font-size: 24px;
     font-weight: 500;
     color: var(--m3c-on-surface);
     margin: 0;
@@ -254,47 +345,163 @@
     color: var(--m3c-on-surface-variant);
   }
 
-  .anime-grid {
+  /* Size Selector */
+  .size-selector {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .size-selector {
+      display: flex;
+      gap: 4px;
+      background: var(--m3c-surface-container);
+      padding: 4px;
+      border-radius: var(--m3-shape-medium);
+    }
+  }
+
+  .size-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    color: var(--m3c-on-surface-variant);
+    cursor: pointer;
+    border-radius: var(--m3-shape-small);
+    transition: all 0.2s;
+  }
+
+  .size-btn:hover {
+    background: var(--m3c-surface-container-high);
+    color: var(--m3c-on-surface);
+  }
+
+  .size-btn.active {
+    background: var(--m3c-primary);
+    color: var(--m3c-on-primary);
+  }
+
+  /* Media Grid */
+  .media-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 16px;
+    gap: 20px;
   }
 
-  .anime-card {
+  @media (min-width: 768px) {
+    .media-grid.grid-small {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 16px;
+    }
+
+    .media-grid.grid-medium {
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .media-grid.grid-large {
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 24px;
+    }
+  }
+
+  /* Media Card */
+  .media-card {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 12px;
+    background: var(--m3c-surface-container);
+    border-radius: var(--m3-shape-large);
+    overflow: hidden;
     cursor: pointer;
+    border: 1px solid var(--m3c-outline-variant);
+    padding: 0;
+    text-align: left;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  }
+
+  .media-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border-color: var(--m3c-outline);
+  }
+
+  .media-card:active {
+    transform: translateY(-2px);
+  }
+
+  /* Poster */
+  .poster-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2/3;
+    overflow: hidden;
+    background: var(--m3c-surface-container);
+  }
+
+  .poster {
+    width: 100%;
     height: 100%;
-  }
-
-  .anime-poster {
-    width: 100%;
-    height: 220px;
     object-fit: cover;
-    border-radius: var(--m3-shape-small);
   }
 
-  .anime-poster-placeholder {
+  .poster-placeholder {
     width: 100%;
-    height: 220px;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--m3c-surface-container-high);
-    border-radius: var(--m3-shape-small);
     color: var(--m3c-outline);
   }
 
-  .anime-info {
+  /* Badges */
+  .rating-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    color: #fbbf24;
+    border-radius: var(--m3-shape-medium);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .status-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: var(--m3-shape-small);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .status-badge.airing {
+    background: var(--m3c-tertiary-container);
+    color: var(--m3c-on-tertiary-container);
+  }
+
+  /* Media Info */
+  .media-info {
+    padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
 
-  .anime-title {
-    font-size: 14px;
+  .media-title {
+    font-size: 15px;
     font-weight: 500;
     color: var(--m3c-on-surface);
     margin: 0;
@@ -304,79 +511,90 @@
     -webkit-line-clamp: 2;
     line-clamp: 2;
     -webkit-box-orient: vertical;
+    line-height: 1.4;
   }
 
-  .anime-meta {
+  .media-subtitle {
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
-    font-size: 11px;
+    gap: 6px;
+    font-size: 12px;
     color: var(--m3c-on-surface-variant);
   }
 
-  .anime-episodes,
-  .anime-rating {
-    display: flex;
-    align-items: center;
-    gap: 3px;
+  .subtitle-separator {
+    opacity: 0.5;
   }
 
-  .anime-rating {
-    color: var(--m3c-tertiary);
-  }
-
-  .anime-genres {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .genre-chip {
-    font-size: 10px;
-    padding: 2px 6px;
-    background: var(--m3c-surface-container-high);
-    color: var(--m3c-on-surface-variant);
-    border-radius: var(--m3-shape-extra-small);
-  }
-
-  /* Empty State */
-  .empty-state {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 16px;
-  }
-
-  .empty-content {
+  /* Progress Section */
+  .progress-section {
+    margin-top: 8px;
     display: flex;
     flex-direction: column;
+    gap: 6px;
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 16px;
-    text-align: center;
-    padding: 32px;
   }
 
-  .empty-content h3 {
-    font-size: 20px;
+  .progress-label {
+    font-size: 11px;
     font-weight: 500;
-    color: var(--m3c-on-surface);
-    margin: 0;
+    color: var(--m3c-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
-  .empty-content p {
-    font-size: 14px;
-    color: var(--m3c-on-surface-variant);
-    margin: 0 0 12px 0;
+  .progress-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--m3c-on-surface);
+  }
+
+  .progress-separator {
+    color: var(--m3c-outline);
+    font-weight: 400;
+  }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--m3c-surface-container-highest);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
   }
 
   /* Responsive */
   @media (max-width: 768px) {
-    .main-content {
-      padding-bottom: 80px;
+    .top-bar-content {
+      padding: 12px 16px;
     }
 
-    .anime-grid {
+    .main-content {
+      padding: 16px;
+      padding-bottom: 100px;
+    }
+
+    .media-grid {
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+    }
+
+    .media-info {
+      padding: 12px;
+    }
+
+    .media-title {
+      font-size: 14px;
     }
   }
 </style>

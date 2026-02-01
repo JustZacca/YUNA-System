@@ -136,43 +136,48 @@
             {#each allResults as result}
               <Card variant="outlined" onclick={() => selectResult(result)}>
                 <div class="result-card">
-                  {#if result.poster}
-                    <img
-                      src={result.poster}
-                      alt={result.name}
-                      class="result-poster"
-                      loading="lazy"
-                    />
-                  {:else}
-                    <div class="result-poster-placeholder">
-                      <Icon icon="mdi:image-off" width="32" />
-                    </div>
-                  {/if}
-                  <div class="result-info">
+                  <div class="result-poster-container">
+                    {#if result.poster}
+                      <img
+                        src={result.poster}
+                        alt={result.name}
+                        class="result-poster"
+                        loading="lazy"
+                      />
+                    {:else}
+                      <div class="result-poster-placeholder">
+                        <Icon icon="mdi:image-off" width="48" />
+                      </div>
+                    {/if}
                     <div class="result-type-badge" class:anime={result.type === 'anime'} class:series={result.type === 'series'} class:film={result.type === 'film'}>
-                      {result.type === 'anime' ? 'Anime' : result.type === 'series' ? 'Serie' : 'Film'}
+                      {result.type === 'anime' ? 'ANIME' : result.type === 'series' ? 'SERIE' : 'FILM'}
                     </div>
-                    <h3 class="result-title">{result.name}</h3>
+                  </div>
+                  
+                  <div class="result-info">
+                    <h3 class="result-title" title={result.name}>{result.name}</h3>
+                    
                     <div class="result-meta">
                       {#if result.year}
                         <span class="meta-item">
-                          <Icon icon="mdi:calendar" width="14" />
+                          <Icon icon="mdi:calendar" width="16" />
                           {result.year}
                         </span>
                       {/if}
                       {#if result.rating}
                         <span class="meta-item rating">
-                          <Icon icon="mdi:star" width="14" />
+                          <Icon icon="mdi:star" width="16" />
                           {result.rating.toFixed(1)}
                         </span>
                       {/if}
                       {#if result.episodes}
                         <span class="meta-item">
-                          <Icon icon="mdi:play-box-multiple" width="14" />
+                          <Icon icon="mdi:play-box-multiple" width="16" />
                           {result.episodes} ep
                         </span>
                       {/if}
                     </div>
+                    
                     {#if result.genres && result.genres.length > 0}
                       <div class="result-genres">
                         {#each result.genres.slice(0, 3) as genre}
@@ -180,14 +185,9 @@
                         {/each}
                       </div>
                     {/if}
+                    
                     {#if result.overview}
                       <p class="result-overview">{result.overview}</p>
-                    {/if}
-                    {#if result.provider}
-                      <div class="provider-badge">
-                        <Icon icon="mdi:download" width="14" />
-                        {result.provider}
-                      </div>
                     {/if}
                   </div>
                 </div>
@@ -370,92 +370,109 @@
 
   .results-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
   }
 
   .results-grid :global(.m3-card) {
     width: 100%;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+  }
+
+  .results-grid :global(.m3-card:hover) {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
   .result-card {
     display: flex;
-    gap: 16px;
-    padding: 16px;
-    cursor: pointer;
+    flex-direction: column;
+    padding: 0;
     width: 100%;
     box-sizing: border-box;
   }
 
+  .result-poster-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2/3;
+    overflow: hidden;
+  }
+
   .result-poster {
-    width: 100px;
-    height: 150px;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
-    border-radius: var(--m3-shape-small);
-    flex-shrink: 0;
+    display: block;
   }
 
   .result-poster-placeholder {
-    width: 100px;
-    height: 150px;
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--m3c-surface-container-high);
-    border-radius: var(--m3-shape-small);
     color: var(--m3c-outline);
-    flex-shrink: 0;
   }
 
   .result-info {
-    flex: 1;
+    padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    min-width: 0;
+    gap: 12px;
+    flex: 1;
   }
 
   .result-type-badge {
-    display: inline-flex;
-    align-self: flex-start;
-    padding: 4px 8px;
-    border-radius: var(--m3-shape-extra-small);
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 6px 12px;
+    border-radius: var(--m3-shape-small);
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
   .result-type-badge.anime {
-    background: var(--m3c-primary-container);
-    color: var(--m3c-on-primary-container);
+    background: rgba(103, 80, 164, 0.9);
+    color: #ffffff;
   }
 
   .result-type-badge.series {
-    background: var(--m3c-secondary-container);
-    color: var(--m3c-on-secondary-container);
+    background: rgba(3, 218, 198, 0.9);
+    color: #000000;
   }
 
   .result-type-badge.film {
-    background: var(--m3c-tertiary-container);
-    color: var(--m3c-on-tertiary-container);
+    background: rgba(251, 140, 0, 0.9);
+    color: #000000;
   }
 
   .result-title {
     font-size: 16px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--m3c-on-surface);
     margin: 0;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-wrap: break-word;
   }
 
   .result-meta {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--m3c-on-surface-variant);
   }
 
@@ -463,10 +480,12 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    font-weight: 500;
   }
 
   .meta-item.rating {
-    color: var(--m3c-tertiary);
+    color: #f59e0b;
+    font-weight: 600;
   }
 
   .result-genres {
@@ -477,35 +496,23 @@
 
   .genre-tag {
     font-size: 11px;
-    padding: 4px 8px;
-    background: var(--m3c-surface-container-high);
+    padding: 4px 10px;
+    background: var(--m3c-surface-container-highest);
     color: var(--m3c-on-surface-variant);
-    border-radius: var(--m3-shape-extra-small);
+    border-radius: var(--m3-shape-full);
+    font-weight: 500;
   }
 
   .result-overview {
     font-size: 13px;
+    line-height: 1.5;
     color: var(--m3c-on-surface-variant);
     margin: 0;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
-  }
-
-  .provider-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    background: var(--m3c-primary);
-    color: var(--m3c-on-primary);
-    border-radius: var(--m3-shape-extra-small);
-    font-size: 11px;
-    font-weight: 500;
-    text-transform: capitalize;
-    align-self: flex-start;
   }
 
   /* Empty State & Hints */
@@ -537,7 +544,7 @@
   /* Responsive */
   @media (max-width: 768px) {
     .main-content {
-      padding: 12px;
+      padding: 10px;
       padding-bottom: 100px;
     }
 
@@ -546,19 +553,84 @@
     }
 
     .results-grid {
-      grid-template-columns: 1fr;
-      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
     }
 
-    .result-card {
-      flex-direction: column;
-      padding: 12px;
+    .results-grid :global(.m3-card) {
+      overflow: hidden;
     }
 
-    .result-poster,
-    .result-poster-placeholder {
-      width: 100%;
-      height: 200px;
+    .result-poster-container {
+      aspect-ratio: 2/3;
+    }
+
+    .result-info {
+      padding: 10px;
+      gap: 6px;
+    }
+
+    .result-title {
+      font-size: 13px;
+      line-height: 1.3;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+    }
+
+    .result-meta {
+      font-size: 11px;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .meta-item :global(svg) {
+      width: 13px;
+      height: 13px;
+    }
+
+    .result-genres {
+      gap: 4px;
+    }
+
+    .genre-tag {
+      font-size: 9px;
+      padding: 3px 6px;
+    }
+
+    .result-overview {
+      font-size: 11px;
+      line-height: 1.4;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+    }
+
+    .result-type-badge {
+      padding: 4px 8px;
+      font-size: 9px;
+      letter-spacing: 0.4px;
+      top: 6px;
+      left: 6px;
     }
   }
+
+  @media (max-width: 480px) {
+    .main-content {
+      padding: 8px;
+      padding-bottom: 100px;
+    }
+
+    .results-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .result-info {
+      padding: 8px;
+    }
+
+    .result-title {
+      font-size: 12px;
+    }
+  }
+
 </style>

@@ -18,6 +18,7 @@ from colorama import init
 from yuna.utils.logging import get_logger
 from yuna.services.media_service import Miko, MikoSC
 from yuna.providers.animeworld.client import Airi
+from yuna.providers.anilist import AniListClient
 from yuna.services.download_service import (
     download_manager, TelegramProgress, get_unified_tracker, UnifiedProgressTracker
 )
@@ -48,6 +49,9 @@ class Kan:
         self.missing_episodes_list = []
 
         # Stato per menu rimozione anime
+        
+        # AniList client
+        self.anilist_client = AniListClient()
         self.selected_anime_for_removal = {}  # user_id -> set(anime_names)
 
         # StreamingCommunity extension
@@ -710,13 +714,25 @@ Seleziona una categoria:
             for anime in anime_list:
                 name = anime.get("name")
                 link = anime.get("link")
+                anilist_id = anime.get("anilist_id")
                 if name and link:
                     try:
+                        # Get available episodes from AnimeWorld
                         await self.miko_instance.loadAnime(link)
                         episodes = await self.miko_instance.getEpisodes()
                         if episodes:
-                            self.airi.update_episodes_number(name, len(episodes))
-                            updated += 1
+                            self.airi.update_available_episodes(name, len(episodes))
+                        
+                        # Get total episodes from AniList if we have the ID
+                        if anilist_id:
+                            try:
+                                anilist_data = self.anilist_client.get_anime(anilist_id)
+                                if anilist_data and anilist_data.get("episodes"):
+                                    self.airi.update_episodes_number(name, anilist_data["episodes"])
+                            except Exception as e:
+                                self.logger.warning(f"Could not fetch AniList data for {name}: {e}")
+                        
+                        updated += 1
                     except Exception as e:
                         self.logger.warning(f"Error updating {name}: {e}")
             await bot.send_message(

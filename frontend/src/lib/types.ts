@@ -16,7 +16,8 @@ export interface SearchResult {
   name: string;
   type: string;
   year?: string;
-  mal_id?: number;
+  mal_id?: number;  // Keep for compatibility, same as anilist_id
+  anilist_id?: number;
   tmdb_id?: number;
   overview?: string;
   poster?: string;
@@ -41,7 +42,7 @@ export interface SearchResponse {
   series: SearchResult[];
   films: SearchResult[];
   tmdb_available: boolean;
-  jikan_available: boolean;
+  anilist_available: boolean;
 }
 
 export interface AnimeBase {
@@ -50,7 +51,7 @@ export interface AnimeBase {
   episodes_downloaded: number;
   episodes_total: number;
   last_update?: string;
-  mal_id?: number;
+  anilist_id?: number;
   synopsis?: string;
   rating?: number;
   year?: number;
@@ -66,7 +67,83 @@ export interface AnimeListResponse {
 
 export interface AnimeDetail extends AnimeBase {
   missing_episodes: number[];
+  episodes_available?: number;  // Episodes available on AnimeWorld
   folder_path?: string;
+  poster?: string;  // Alias for poster_url for compatibility
+}
+
+// Series types
+export interface SeriesBase {
+  name: string;
+  link: string;
+  episodes_downloaded: number;
+  episodes_total: number;
+  last_update?: string;
+  provider?: string;
+  year?: number;
+  // TMDB metadata
+  tmdb_id?: number;
+  overview?: string;
+  poster_url?: string;
+  backdrop_url?: string;
+  rating?: number;
+  genres?: string[];
+  status?: string;
+}
+
+export interface SeriesListResponse {
+  items: SeriesBase[];
+  total: number;
+}
+
+export interface SeriesDetail extends SeriesBase {
+  slug?: string;
+  media_id?: number;
+  provider_language?: string;
+  seasons_data?: string;
+  // TMDB metadata
+  tmdb_id?: number;
+  overview?: string;
+  poster_path?: string;
+  backdrop_path?: string;
+  vote_average?: number;
+  genre_ids?: number[];
+}
+
+// Film types
+export interface FilmBase {
+  name: string;
+  link: string;
+  downloaded: boolean;
+  last_update?: string;
+  provider?: string;
+  year?: number;
+  // TMDB metadata
+  tmdb_id?: number;
+  overview?: string;
+  poster_url?: string;
+  backdrop_url?: string;
+  rating?: number;
+  genres?: string[];
+  runtime?: number;
+}
+
+export interface FilmListResponse {
+  items: FilmBase[];
+  total: number;
+}
+
+export interface FilmDetail extends FilmBase {
+  slug?: string;
+  media_id?: number;
+  provider_language?: string;
+  // TMDB metadata
+  tmdb_id?: number;
+  overview?: string;
+  poster_path?: string;
+  backdrop_path?: string;
+  vote_average?: number;
+  genre_ids?: number[];
 }
 
 export interface AnimeAddRequest {

@@ -143,7 +143,7 @@ class Miko:
 
         missing = total_numbers - existing_numbers
         self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
-        self.airi.update_episodes_number(self.anime_name, len(total_numbers))
+        self.airi.update_available_episodes(self.anime_name, len(total_numbers))
 
         logger.info(f"Trovati {len(existing_numbers)} episodi già scaricati. Ne mancano {len(missing)}", extra={"classname": self.__class__.__name__})
 
@@ -198,7 +198,6 @@ class Miko:
             logger.info(f"{len(extra)} episodi extra trovati: {extra}", extra={"classname": self.__class__.__name__})
 
         self.airi.update_downloaded_episodes(self.anime_name, len(existing_numbers))
-        self.airi.update_episodes_number(self.anime_name, len(total_numbers))
 
         return bool(missing or extra)
 

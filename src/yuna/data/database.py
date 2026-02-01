@@ -119,6 +119,34 @@ class Database:
                 ALTER TABLE anime RENAME COLUMN mal_id TO anilist_id;
             """
         },
+        {
+            "id": 6,
+            "description": "Add episodi_disponibili to track available episodes from AnimeWorld",
+            "sql": """
+                -- Add field to store number of available episodes from AnimeWorld
+                ALTER TABLE anime ADD COLUMN episodi_disponibili INTEGER DEFAULT 0;
+            """
+        },
+        {
+            "id": 7,
+            "description": "Add TMDB metadata to tv and movies tables",
+            "sql": """
+                -- Add TMDB metadata for enriching series and films information
+                ALTER TABLE tv ADD COLUMN tmdb_id INTEGER;
+                ALTER TABLE tv ADD COLUMN overview TEXT;
+                ALTER TABLE tv ADD COLUMN poster_path TEXT;
+                ALTER TABLE tv ADD COLUMN backdrop_path TEXT;
+                ALTER TABLE tv ADD COLUMN vote_average REAL;
+                ALTER TABLE tv ADD COLUMN genre_ids TEXT;
+                
+                ALTER TABLE movies ADD COLUMN tmdb_id INTEGER;
+                ALTER TABLE movies ADD COLUMN overview TEXT;
+                ALTER TABLE movies ADD COLUMN poster_path TEXT;
+                ALTER TABLE movies ADD COLUMN backdrop_path TEXT;
+                ALTER TABLE movies ADD COLUMN vote_average REAL;
+                ALTER TABLE movies ADD COLUMN genre_ids TEXT;
+            """
+        },
     ]
 
     def _init_database(self):
@@ -215,8 +243,7 @@ class Database:
         """Get all anime from database."""
         with self._get_connection() as conn:
             cursor = conn.execute("""
-                SELECT name, link, last_update, episodi_scaricati, numero_episodi
-                FROM anime ORDER BY name
+                SELECT * FROM anime ORDER BY name
             """)
             return [dict(row) for row in cursor.fetchall()]
 
@@ -277,6 +304,18 @@ class Database:
             """, (numero_episodi, name))
             return cursor.rowcount > 0
 
+    def update_anime_available_episodes(self, name: str, episodi_disponibili: int) -> bool:
+        """Update available episodes count from AnimeWorld."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                UPDATE anime SET episodi_disponibili = ?
+                WHERE name = ?
+            """, (episodi_disponibili, name))
+            if cursor.rowcount > 0:
+                logger.info(f"Updated available episodes for '{name}': {episodi_disponibili}")
+                return True
+            return False
+
     def update_anime_last_update(self, name: str, last_update: datetime) -> bool:
         """Update last update timestamp."""
         with self._get_connection() as conn:
@@ -285,6 +324,42 @@ class Database:
                 WHERE name = ?
             """, (last_update.strftime("%Y-%m-%d %H:%M:%S"), name))
             return cursor.rowcount > 0
+
+    def update_anime(self, name: str, **kwargs) -> bool:
+        """Update anime metadata fields dynamically."""
+        if not kwargs:
+            return False
+
+        # Build UPDATE query dynamically
+        set_clauses = []
+        values = []
+        
+        for key, value in kwargs.items():
+            # Handle genres list -> JSON string
+            if key == 'genres' and isinstance(value, list):
+                value = ','.join(value)
+            set_clauses.append(f"{key} = ?")
+            values.append(value)
+        
+        values.append(name)  # Add name for WHERE clause
+        
+        query = f"""
+            UPDATE anime 
+            SET {', '.join(set_clauses)}
+            WHERE name = ?
+        """
+        
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(query, values)
+                if cursor.rowcount > 0:
+                    logger.info(f"Updated anime '{name}' with fields: {list(kwargs.keys())}")
+                    return True
+                logger.warning(f"Anime '{name}' not found for update.")
+                return False
+        except Exception as e:
+            logger.error(f"Error updating anime '{name}': {e}")
+            return False
 
     def remove_anime(self, name: str) -> bool:
         """Remove anime from database."""
@@ -298,6 +373,10 @@ class Database:
             logger.warning(f"Anime '{name}' not found.")
             return False
 
+    def delete_anime(self, name: str) -> bool:
+        """Alias for remove_anime."""
+        return self.remove_anime(name)
+
     def get_anime_link(self, name: str) -> Optional[str]:
         """Get anime link by name (partial match)."""
         anime = self.search_anime_by_name(name)
@@ -309,9 +388,7 @@ class Database:
         """Get all TV shows from database."""
         with self._get_connection() as conn:
             cursor = conn.execute("""
-                SELECT name, link, last_update, episodi_scaricati, numero_episodi,
-                       provider, slug, media_id, provider_language, year, seasons_data
-                FROM tv ORDER BY name
+                SELECT * FROM tv ORDER BY name
             """)
             return [dict(row) for row in cursor.fetchall()]
 
@@ -405,6 +482,10 @@ class Database:
             logger.warning(f"TV show '{name}' not found.")
             return False
 
+    def delete_tv(self, name: str) -> bool:
+        """Alias for remove_tv."""
+        return self.remove_tv(name)
+
     def get_tv_link(self, name: str) -> Optional[str]:
         """Get TV show link by name (partial match)."""
         tv = self.search_tv_by_name(name)
@@ -416,9 +497,7 @@ class Database:
         """Get all movies from database."""
         with self._get_connection() as conn:
             cursor = conn.execute("""
-                SELECT name, link, last_update, scaricato,
-                       provider, slug, media_id, provider_language, year
-                FROM movies ORDER BY name
+                SELECT * FROM movies ORDER BY name
             """)
             return [dict(row) for row in cursor.fetchall()]
 
@@ -493,6 +572,10 @@ class Database:
                 return True
             logger.warning(f"Movie '{name}' not found.")
             return False
+
+    def delete_movie(self, name: str) -> bool:
+        """Alias for remove_movie."""
+        return self.remove_movie(name)
 
     def get_movie_link(self, name: str) -> Optional[str]:
         """Get movie link by name (partial match)."""

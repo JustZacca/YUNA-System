@@ -6,16 +6,24 @@
   import { api } from '$lib/api';
   import { Button, Card, LinearProgressEstimate, snackbar } from 'm3-svelte';
   import Icon from '@iconify/svelte';
-  import type { AnimeDetail } from '$lib/types';
+  import type { SeriesDetail } from '$lib/types';
 
-  let anime: AnimeDetail | null = null;
+  let series: SeriesDetail | null = null;
   let loading = true;
   let error: string | null = null;
   let associating = false;
-  let refreshing = false;
   let showAssociateModal = false;
   let searchResults: any[] = [];
   let selectedResult: any = null;
+
+  const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+
+  const GENRE_MAP: Record<number, string> = {
+    10759: 'Azione e Avventura', 16: 'Animazione', 35: 'Commedia', 80: 'Crimine',
+    99: 'Documentario', 18: 'Dramma', 10751: 'Famiglia', 10762: 'Ragazzi',
+    9648: 'Mistero', 10763: 'News', 10764: 'Reality', 10765: 'Sci-Fi e Fantasy',
+    10766: 'Soap', 10767: 'Talk Show', 10768: 'Guerra e Politica', 37: 'Western',
+  };
 
   onMount(async () => {
     await user.checkAuth();
@@ -31,7 +39,7 @@
     error = null;
     try {
       const name = decodeURIComponent($page.params.name);
-      anime = await api.getAnimeDetail(name);
+      series = await api.getSeriesDetail(name);
     } catch (err: any) {
       error = err.message || 'Errore nel caricamento dei dettagli';
       snackbar(error ?? 'Errore sconosciuto', undefined, true);
@@ -41,10 +49,8 @@
   }
 
   function getProgressPercent(): number {
-    if (!anime) return 0;
-    const denominator = anime.episodes_available || anime.episodes_total;
-    if (!denominator || denominator === 0) return 0;
-    return Math.min(100, Math.round((anime.episodes_downloaded / denominator) * 100));
+    if (!series || !series.episodes_total || series.episodes_total === 0) return 0;
+    return Math.min(100, Math.round((series.episodes_downloaded / series.episodes_total) * 100));
   }
 
   function getProgressColor(): string {
@@ -55,20 +61,16 @@
   }
 
   async function associateMetadata() {
-    if (!anime) return;
+    if (!series) return;
     associating = true;
     try {
-      const cleanName = anime.name
-        .replace(/\s*\(ITA\)\s*/gi, '')
-        .replace(/\s*\(SUB ITA\)\s*/gi, '')
-        .replace(/\s*\(DUB ITA\)\s*/gi, '')
-        .trim();
-      const searchResponse = await api.search(cleanName, 'anime');
-      if (searchResponse.anime && searchResponse.anime.length > 0) {
-        searchResults = searchResponse.anime;
+      const cleanName = series.name.replace(/\s*\(\d{4}\)\s*/g, '').trim();
+      const searchResponse = await api.search(cleanName, 'series');
+      if (searchResponse.series && searchResponse.series.length > 0) {
+        searchResults = searchResponse.series;
         showAssociateModal = true;
       } else {
-        snackbar('Nessun risultato trovato su AniList', undefined, true);
+        snackbar('Nessun risultato trovato su TMDB', undefined, true);
       }
     } catch (err: any) {
       snackbar(err.message || 'Errore nella ricerca dei metadati', undefined, true);
@@ -78,27 +80,13 @@
   }
 
   async function confirmAssociation() {
-    if (!anime || !selectedResult || !selectedResult.mal_id) return;
+    if (!series || !selectedResult || !selectedResult.tmdb_id) return;
     try {
-      anime = await api.updateAnimeMetadata(anime.name, selectedResult.mal_id);
+      series = await api.updateSeriesMetadata(series.name, selectedResult.tmdb_id);
       snackbar('Metadati associati con successo!', undefined, false);
       closeModal();
     } catch (err: any) {
       snackbar(err.message || 'Errore nell\'associazione dei metadati', undefined, true);
-    }
-  }
-
-  async function refreshAvailableEpisodes() {
-    if (!anime) return;
-    refreshing = true;
-    try {
-      const result = await api.refreshAnimeEpisodes(anime.name);
-      snackbar(result.message || 'Episodi aggiornati!', undefined, false);
-      await loadData();
-    } catch (err: any) {
-      snackbar(err.message || 'Errore nell\'aggiornamento', undefined, true);
-    } finally {
-      refreshing = false;
     }
   }
 
@@ -110,17 +98,17 @@
 </script>
 
 <svelte:head>
-  <title>YUNA - {anime?.name || 'Anime'}</title>
+  <title>YUNA - {series?.name || 'Serie TV'}</title>
 </svelte:head>
 
 <div class="detail-page">
   <!-- Top Bar -->
   <header class="top-bar">
     <div class="top-bar-content">
-      <button class="back-button" on:click={() => goto('/anime')}>
+      <button class="back-button" on:click={() => goto('/series')}>
         <Icon icon="mdi:arrow-left" width="24" />
       </button>
-      <h1 class="page-title">Dettagli Anime</h1>
+      <h1 class="page-title">Dettagli Serie TV</h1>
     </div>
   </header>
 
@@ -141,60 +129,60 @@
           </div>
         </Card>
       </div>
-    {:else if anime}
+    {:else if series}
       <div class="detail-layout">
         <!-- Hero Section -->
         <section class="hero-section">
           <div class="poster-wrapper">
-            {#if anime.poster_url || anime.poster}
+            {#if series.poster_path}
               <img
-                src={anime.poster_url || anime.poster}
-                alt={anime.name}
+                src="{TMDB_IMAGE_BASE}{series.poster_path}"
+                alt={series.name}
                 class="poster"
               />
             {:else}
               <div class="poster-placeholder">
-                <Icon icon="mdi:animation-play" width="64" />
+                <Icon icon="mdi:television" width="64" />
               </div>
             {/if}
           </div>
 
           <div class="hero-info">
-            <h1 class="title">{anime.name}</h1>
+            <h1 class="title">{series.name}</h1>
 
             <!-- Metadata Row -->
             <div class="meta-row">
-              {#if anime.year}
+              {#if series.year}
                 <span class="meta-chip">
                   <Icon icon="mdi:calendar" width="16" />
-                  {anime.year}
+                  {series.year}
                 </span>
               {/if}
-              {#if anime.rating}
+              {#if series.vote_average}
                 <span class="meta-chip rating">
                   <Icon icon="mdi:star" width="16" />
-                  {anime.rating.toFixed(1)}
+                  {series.vote_average.toFixed(1)}
                 </span>
               {/if}
-              {#if anime.status}
-                <span class="meta-chip" class:airing={anime.status === 'Releasing'}>
-                  <Icon icon={anime.status === 'Releasing' ? 'mdi:broadcast' : 'mdi:check-circle'} width="16" />
-                  {anime.status === 'Releasing' ? 'In onda' : anime.status === 'Finished' ? 'Completato' : anime.status}
+              {#if series.provider}
+                <span class="meta-chip">
+                  <Icon icon="mdi:web" width="16" />
+                  {series.provider}
                 </span>
               {/if}
             </div>
 
             <!-- Genres -->
-            {#if anime.genres && anime.genres.length > 0}
+            {#if series.genre_ids && series.genre_ids.length > 0}
               <div class="genres-row">
-                {#each anime.genres as genre}
-                  <span class="genre-chip">{genre}</span>
+                {#each series.genre_ids as genreId}
+                  <span class="genre-chip">{GENRE_MAP[genreId] || 'Altro'}</span>
                 {/each}
               </div>
             {/if}
 
             <!-- No Metadata Warning -->
-            {#if !anime.anilist_id}
+            {#if !series.tmdb_id}
               <div class="warning-banner">
                 <Icon icon="mdi:alert-circle-outline" width="20" />
                 <span>Metadati non associati</span>
@@ -212,107 +200,66 @@
         </section>
 
         <!-- Synopsis -->
-        {#if anime.synopsis}
+        {#if series.overview}
           <section class="content-section">
             <h2 class="section-title">Trama</h2>
             <div class="synopsis-card">
-              <p>{anime.synopsis}</p>
+              <p>{series.overview}</p>
             </div>
           </section>
         {/if}
 
         <!-- Episodes Section -->
-        <section class="content-section">
-          <div class="section-header">
+        {#if series.episodes_downloaded > 0 || series.episodes_total > 0}
+          <section class="content-section">
             <h2 class="section-title">Episodi</h2>
-            <Button variant="text" onclick={refreshAvailableEpisodes} disabled={refreshing}>
-              {#if refreshing}
-                <Icon icon="mdi:loading" width="18" class="spinning" />
-              {:else}
-                <Icon icon="mdi:refresh" width="18" />
-              {/if}
-              Aggiorna
-            </Button>
-          </div>
 
-          <!-- Stats Grid -->
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-icon" style="background: var(--m3c-primary-container); color: var(--m3c-on-primary-container);">
-                <Icon icon="mdi:check-circle" width="24" />
+            <!-- Stats Grid -->
+            <div class="stats-grid stats-2col">
+              <div class="stat-card">
+                <div class="stat-icon" style="background: var(--m3c-primary-container); color: var(--m3c-on-primary-container);">
+                  <Icon icon="mdi:check-circle" width="24" />
+                </div>
+                <div class="stat-info">
+                  <span class="stat-value">{series.episodes_downloaded}</span>
+                  <span class="stat-label">Scaricati</span>
+                </div>
               </div>
-              <div class="stat-info">
-                <span class="stat-value">{anime.episodes_downloaded}</span>
-                <span class="stat-label">Scaricati</span>
-              </div>
-            </div>
 
-            <div class="stat-card">
-              <div class="stat-icon" style="background: var(--m3c-tertiary-container); color: var(--m3c-on-tertiary-container);">
-                <Icon icon="mdi:download" width="24" />
-              </div>
-              <div class="stat-info">
-                <span class="stat-value">{anime.episodes_available || '?'}</span>
-                <span class="stat-label">Disponibili</span>
+              <div class="stat-card">
+                <div class="stat-icon" style="background: var(--m3c-secondary-container); color: var(--m3c-on-secondary-container);">
+                  <Icon icon="mdi:playlist-check" width="24" />
+                </div>
+                <div class="stat-info">
+                  <span class="stat-value">{series.episodes_total || '?'}</span>
+                  <span class="stat-label">Totali</span>
+                </div>
               </div>
             </div>
 
-            <div class="stat-card">
-              <div class="stat-icon" style="background: var(--m3c-secondary-container); color: var(--m3c-on-secondary-container);">
-                <Icon icon="mdi:playlist-check" width="24" />
+            <!-- Progress -->
+            <div class="progress-card">
+              <div class="progress-header">
+                <span class="progress-title">Progresso download</span>
+                <span class="progress-percent">{getProgressPercent()}%</span>
               </div>
-              <div class="stat-info">
-                <span class="stat-value">{anime.episodes_total || '?'}</span>
-                <span class="stat-label">Totali</span>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: {getProgressPercent()}%; background: {getProgressColor()}"></div>
               </div>
+              <span class="progress-detail">
+                {series.episodes_downloaded} di {series.episodes_total || '?'} episodi
+              </span>
             </div>
-          </div>
-
-          <!-- Info Banner -->
-          {#if anime.episodes_available && anime.episodes_total > anime.episodes_available}
-            <div class="info-banner">
-              <Icon icon="mdi:information-outline" width="20" />
-              <span>{anime.episodes_total - anime.episodes_available} episodi devono ancora uscire</span>
-            </div>
-          {/if}
-
-          <!-- Progress -->
-          <div class="progress-card">
-            <div class="progress-header">
-              <span class="progress-title">Progresso download</span>
-              <span class="progress-percent">{getProgressPercent()}%</span>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill" style="width: {getProgressPercent()}%; background: {getProgressColor()}"></div>
-            </div>
-            <span class="progress-detail">
-              {anime.episodes_downloaded} di {anime.episodes_available || anime.episodes_total || '?'} episodi
-            </span>
-          </div>
-
-          <!-- Missing Episodes -->
-          {#if anime.missing_episodes && anime.missing_episodes.length > 0}
-            <div class="missing-section">
-              <h3 class="missing-title">
-                <Icon icon="mdi:download-outline" width="20" />
-                Episodi da scaricare ({anime.missing_episodes.length})
-              </h3>
-              <div class="episode-badges">
-                {#each anime.missing_episodes as ep}
-                  <span class="episode-badge">{ep}</span>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </section>
+          </section>
+        {/if}
       </div>
     {:else}
       <div class="state-container">
         <Card variant="outlined">
           <div class="state-content">
             <Icon icon="mdi:alert-circle" width="48" color="var(--m3c-error)" />
-            <h3>Anime non trovato</h3>
-            <Button variant="filled" onclick={() => goto('/anime')}>Torna alla lista</Button>
+            <h3>Serie non trovata</h3>
+            <Button variant="filled" onclick={() => goto('/series')}>Torna alla lista</Button>
           </div>
         </Card>
       </div>
@@ -324,14 +271,14 @@
     <div class="modal-overlay" on:click={closeModal} on:keydown={(e) => e.key === 'Escape' && closeModal()} role="button" tabindex="0">
       <div class="modal-content" on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-modal="true">
         <div class="modal-header">
-          <h2>Seleziona Anime</h2>
+          <h2>Seleziona Serie TV</h2>
           <button class="icon-button" on:click={closeModal}>
             <Icon icon="mdi:close" width="24" />
           </button>
         </div>
 
         <div class="modal-body">
-          <p class="modal-subtitle">Trovati {searchResults.length} risultati per "{anime?.name}"</p>
+          <p class="modal-subtitle">Trovati {searchResults.length} risultati per "{series?.name}"</p>
 
           <div class="results-list">
             {#each searchResults as result}
@@ -353,7 +300,7 @@
                   <div class="result-meta">
                     {#if result.year}<span><Icon icon="mdi:calendar" width="14" /> {result.year}</span>{/if}
                     {#if result.rating}<span class="rating"><Icon icon="mdi:star" width="14" /> {result.rating.toFixed(1)}</span>{/if}
-                    {#if result.episodes}<span><Icon icon="mdi:play-box-multiple" width="14" /> {result.episodes} ep</span>{/if}
+                    {#if result.seasons}<span><Icon icon="mdi:television" width="14" /> {result.seasons} stagioni</span>{/if}
                   </div>
                   {#if result.genres?.length > 0}
                     <div class="result-genres">
@@ -558,12 +505,6 @@
     border-color: #f59e0b;
   }
 
-  .meta-chip.airing {
-    background: var(--m3c-tertiary-container);
-    color: var(--m3c-on-tertiary-container);
-    border-color: transparent;
-  }
-
   .genres-row {
     display: flex;
     flex-wrap: wrap;
@@ -597,12 +538,6 @@
     gap: 16px;
   }
 
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
   .section-title {
     font-size: 20px;
     font-weight: 600;
@@ -629,6 +564,10 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
+  }
+
+  .stats-grid.stats-2col {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .stat-card {
@@ -667,17 +606,6 @@
     color: var(--m3c-on-surface-variant);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-  }
-
-  .info-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--m3c-secondary-container);
-    color: var(--m3c-on-secondary-container);
-    border-radius: var(--m3-shape-medium);
-    font-size: 14px;
   }
 
   /* Progress Card */
@@ -725,40 +653,6 @@
   .progress-detail {
     font-size: 12px;
     color: var(--m3c-on-surface-variant);
-  }
-
-  /* Missing Episodes */
-  .missing-section {
-    padding: 20px;
-    background: var(--m3c-surface-container);
-    border: 1px solid var(--m3c-outline-variant);
-    border-radius: var(--m3-shape-large);
-    border-left: 4px solid var(--m3c-tertiary);
-  }
-
-  .missing-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--m3c-on-surface);
-    margin: 0 0 12px 0;
-  }
-
-  .episode-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .episode-badge {
-    padding: 6px 12px;
-    background: var(--m3c-tertiary-container);
-    color: var(--m3c-on-tertiary-container);
-    border-radius: var(--m3-shape-full);
-    font-size: 13px;
-    font-weight: 500;
   }
 
   /* Modal */
@@ -998,7 +892,7 @@
       text-align: center;
     }
 
-    .stats-grid {
+    .stats-grid, .stats-grid.stats-2col {
       grid-template-columns: 1fr;
     }
 

@@ -48,6 +48,7 @@ class AnimeListResponse(BaseModel):
 class AnimeDetail(AnimeBase):
     """Detailed anime info."""
     missing_episodes: List[int] = []
+    episodes_available: Optional[int] = None  # Episodes available on AnimeWorld
     folder_path: Optional[str] = None
 
 
@@ -143,7 +144,7 @@ async def list_anime(db: DbDep):
             episodes_total=a.get("numero_episodi", 0),
             last_update=a.get("last_update"),
             # Try to get AniList metadata from database
-            mal_id=a.get("mal_id"),
+            anilist_id=a.get("anilist_id"),
             synopsis=a.get("synopsis"),
             rating=a.get("rating"),
             year=a.get("year"),
@@ -162,6 +163,7 @@ async def get_anime(name: str, db: DbDep):
     Get detailed info for a specific anime.
 
     Includes missing episodes list and AniList metadata.
+    Uses AnimeWorld to determine available episodes.
     """
     anime = db.get_anime_by_name(name)
 
@@ -171,21 +173,29 @@ async def get_anime(name: str, db: DbDep):
             detail=f"Anime '{name}' not found"
         )
 
-    # Calculate missing episodes (using Italian field names from DB)
+    # Get downloaded count from DB
     downloaded = anime.get("episodi_scaricati", 0)
-    total = anime.get("numero_episodi", 0)
-
-    # Simple missing calculation (assumes sequential episodes)
-    missing = list(range(downloaded + 1, total + 1)) if total > downloaded else []
+    total_anilist = anime.get("numero_episodi", 0)
+    episodes_available = anime.get("episodi_disponibili", 0) or None
+    
+    # Calculate missing episodes based on available vs downloaded
+    missing = []
+    if episodes_available and episodes_available > 0:
+        # We know how many are available, calculate missing
+        missing = [n for n in range(1, episodes_available + 1) if n > downloaded]
+    elif total_anilist > downloaded:
+        # Fallback: use total from AniList
+        missing = list(range(downloaded + 1, total_anilist + 1))
 
     return AnimeDetail(
         name=anime["name"],
         link=anime.get("link", ""),
         episodes_downloaded=downloaded,
-        episodes_total=total,
+        episodes_total=total_anilist,  # Total from AniList (includes not yet aired)
+        episodes_available=episodes_available,  # Available from DB (or None)
         last_update=anime.get("last_update"),
-        missing_episodes=missing,
-        folder_path=None,  # Could be populated from Airi
+        missing_episodes=missing,  # Only available but not downloaded
+        folder_path=None,
         # AniList metadata
         anilist_id=anime.get("anilist_id"),
         synopsis=anime.get("synopsis"),
@@ -286,8 +296,8 @@ async def add_anime(request: AnimeAddRequest, db: DbDep, user: CurrentUser):
 
 
 class AnimeMetadataUpdate(BaseModel):
-    """Update anime metadata from Jikan."""
-    mal_id: Optional[int] = None
+    """Update anime metadata from AniList."""
+    anilist_id: Optional[int] = None
     synopsis: Optional[str] = None
     rating: Optional[float] = None
     year: Optional[int] = None
@@ -299,7 +309,7 @@ class AnimeMetadataUpdate(BaseModel):
 @router.patch("/{name}", response_model=AnimeDetail)
 async def update_anime_metadata(name: str, request: AnimeMetadataUpdate, db: DbDep, user: CurrentUser):
     """
-    Update anime metadata from Jikan.
+    Update anime metadata from AniList.
     
     Requires authentication.
     """
@@ -312,10 +322,33 @@ async def update_anime_metadata(name: str, request: AnimeMetadataUpdate, db: DbD
         )
 
     try:
-        # Update anime metadata
         update_data = {}
-        if request.mal_id is not None:
-            update_data["mal_id"] = request.mal_id
+        
+        # If anilist_id is provided, fetch metadata from AniList
+        if request.anilist_id is not None:
+            anilist = get_anilist()
+            try:
+                anilist_data = await anilist.get_anime_by_id(request.anilist_id)
+                if anilist_data:
+                    # Merge AniList data into update_data
+                    update_data["anilist_id"] = request.anilist_id
+                    update_data["synopsis"] = anilist_data.get("synopsis")
+                    update_data["rating"] = anilist_data.get("rating")
+                    update_data["year"] = anilist_data.get("year")
+                    update_data["genres"] = ','.join(anilist_data.get("genres", []))
+                    update_data["status"] = anilist_data.get("status")
+                    update_data["poster_url"] = anilist_data.get("poster_url")
+                    # Update total episodes if available
+                    if anilist_data.get("episodes"):
+                        update_data["numero_episodi"] = anilist_data["episodes"]
+                    logger.info(f"Fetched metadata from AniList for anime '{name}'")
+                else:
+                    update_data["anilist_id"] = request.anilist_id
+            except Exception as e:
+                logger.error(f"Error fetching AniList data: {e}")
+                update_data["anilist_id"] = request.anilist_id
+        
+        # Allow manual overrides
         if request.synopsis is not None:
             update_data["synopsis"] = request.synopsis
         if request.rating is not None:
@@ -330,7 +363,7 @@ async def update_anime_metadata(name: str, request: AnimeMetadataUpdate, db: DbD
             update_data["poster_url"] = request.poster_url
 
         db.update_anime(name, **update_data)
-        logger.info(f"Updated metadata for anime '{name}'")
+        logger.info(f"Updated metadata for anime '{name}' with fields: {list(update_data.keys())}")
 
         # Return updated anime detail
         updated_anime = db.get_anime_by_name(name)
@@ -348,7 +381,7 @@ async def update_anime_metadata(name: str, request: AnimeMetadataUpdate, db: DbD
             last_update=updated_anime.get("last_update"),
             missing_episodes=missing,
             folder_path=None,
-            mal_id=updated_anime.get("mal_id"),
+            anilist_id=updated_anime.get("anilist_id"),
             synopsis=updated_anime.get("synopsis"),
             rating=updated_anime.get("rating"),
             year=updated_anime.get("year"),
@@ -358,6 +391,67 @@ async def update_anime_metadata(name: str, request: AnimeMetadataUpdate, db: DbD
         )
     except Exception as e:
         logger.error(f"Error updating anime metadata: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.post("/{name}/refresh-episodes")
+async def refresh_available_episodes(name: str, db: DbDep, user: CurrentUser):
+    """
+    Refresh available episodes count from AnimeWorld.
+    
+    Updates the episodi_disponibili field in database.
+    Requires authentication.
+    """
+    anime = db.get_anime_by_name(name)
+
+    if not anime:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anime '{name}' not found"
+        )
+
+    try:
+        miko = Miko()
+        anime_link = anime.get("link", "")
+        
+        if not anime_link:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Anime has no AnimeWorld link"
+            )
+
+        # Load anime from AnimeWorld
+        await miko.loadAnime(anime_link)
+        
+        # Get episodes
+        available_episodes = await miko.getEpisodes()
+        
+        if available_episodes and len(available_episodes) > 0:
+            # Get max episode number
+            max_available = max(int(ep.number) for ep in available_episodes if hasattr(ep, 'number'))
+            
+            # Update database
+            db.update_anime_available_episodes(name, max_available)
+            logger.info(f"Updated available episodes for '{name}': {max_available}")
+            
+            return {
+                "success": True,
+                "episodes_available": max_available,
+                "message": f"Trovati {max_available} episodi disponibili"
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Nessun episodio trovato su AnimeWorld"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error refreshing episodes for '{name}': {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -649,3 +743,75 @@ async def _download_anime_task(name: str, link: str, episodes: List[int]):
         # Clear after delay
         await asyncio.sleep(60)
         clear_download_status(name)
+
+
+@router.delete("/{name}")
+async def delete_anime(
+    name: str,
+    db: DbDep,
+    current_user: CurrentUser
+):
+    """
+    Delete anime completely.
+    
+    Removes:
+    - Database entry
+    - All downloaded files and folders
+    """
+    import shutil
+    import os
+    
+    # Verify anime exists
+    anime = db.get_anime_by_name(name)
+    if not anime:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anime '{name}' not found"
+        )
+    
+    # Get anime folder path
+    anime_folder = os.getenv("ANIME_FOLDER", "/downloads/anime")
+    anime_path = os.path.join(anime_folder, name)
+    
+    logger.info(f"Attempting to delete anime '{name}'")
+    logger.info(f"Anime folder: {anime_folder}")
+    logger.info(f"Full path: {anime_path}")
+    logger.info(f"Path exists: {os.path.exists(anime_path)}")
+    
+    # Delete files if folder exists
+    deleted_files = False
+    if os.path.exists(anime_path):
+        try:
+            shutil.rmtree(anime_path)
+            deleted_files = True
+            logger.info(f"Deleted files for anime '{name}' at {anime_path}")
+        except Exception as e:
+            logger.error(f"Error deleting files for anime '{name}': {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error deleting files: {str(e)}"
+            )
+    else:
+        logger.warning(f"Anime folder does not exist at {anime_path}")
+    
+    # Delete from database
+    try:
+        success = db.delete_anime(name)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete anime from database"
+            )
+        logger.info(f"Deleted anime '{name}' from database")
+    except Exception as e:
+        logger.error(f"Error deleting anime '{name}' from database: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting from database: {str(e)}"
+        )
+    
+    return {
+        "success": True,
+        "message": f"Anime '{name}' deleted successfully",
+        "files_deleted": deleted_files
+    }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { preloadData } from '$app/navigation';
   import '../app.css';
   import { Snackbar } from 'm3-svelte';
   import Icon from '@iconify/svelte';
@@ -7,6 +8,11 @@
   function handleLogout() {
     localStorage.removeItem('access_token');
     goto('/');
+  }
+
+  // Preload common routes on hover
+  function handleMouseEnter(route: string) {
+    preloadData(route);
   }
 </script>
 
@@ -20,37 +26,37 @@
 
     <ul class="nav-menu">
       <li>
-        <a href="/dashboard">
+        <a href="/dashboard" on:mouseenter={() => handleMouseEnter('/dashboard')} data-sveltekit-preload-data>
           <Icon icon="mdi:home" width="24" />
           <span>Home</span>
         </a>
       </li>
       <li>
-        <a href="/search">
+        <a href="/search" on:mouseenter={() => handleMouseEnter('/search')} data-sveltekit-preload-data>
           <Icon icon="mdi:magnify" width="24" />
           <span>Cerca</span>
         </a>
       </li>
       <li>
-        <a href="/anime">
+        <a href="/anime" on:mouseenter={() => handleMouseEnter('/anime')} data-sveltekit-preload-data>
           <Icon icon="mdi:animation-play" width="24" />
           <span>Anime</span>
         </a>
       </li>
       <li>
-        <a href="/series">
+        <a href="/series" on:mouseenter={() => handleMouseEnter('/series')} data-sveltekit-preload-data>
           <Icon icon="mdi:television-classic" width="24" />
           <span>Serie</span>
         </a>
       </li>
       <li>
-        <a href="/films">
+        <a href="/films" on:mouseenter={() => handleMouseEnter('/films')} data-sveltekit-preload-data>
           <Icon icon="mdi:film" width="24" />
           <span>Film</span>
         </a>
       </li>
       <li>
-        <a href="/manage/anime">
+        <a href="/manage" on:mouseenter={() => handleMouseEnter('/manage')} data-sveltekit-preload-data>
           <Icon icon="mdi:cog" width="24" />
           <span>Gestisci</span>
         </a>
@@ -71,25 +77,25 @@
 
   <!-- Bottom Navigation (Mobile) -->
   <nav class="bottom-nav">
-    <a href="/dashboard" class="nav-item">
+    <a href="/dashboard" class="nav-item" data-sveltekit-preload-data>
       <Icon icon="mdi:home" width="24" />
       <span>Home</span>
     </a>
-    <a href="/search" class="nav-item">
-      <Icon icon="mdi:magnify" width="24" />
-      <span>Cerca</span>
-    </a>
-    <a href="/anime" class="nav-item">
+    <a href="/anime" class="nav-item" data-sveltekit-preload-data>
       <Icon icon="mdi:animation-play" width="24" />
       <span>Anime</span>
     </a>
-    <a href="/series" class="nav-item">
+    <a href="/series" class="nav-item" data-sveltekit-preload-data>
       <Icon icon="mdi:television-classic" width="24" />
       <span>Serie</span>
     </a>
-    <a href="/films" class="nav-item">
+    <a href="/films" class="nav-item" data-sveltekit-preload-data>
       <Icon icon="mdi:film" width="24" />
       <span>Film</span>
+    </a>
+    <a href="/manage" class="nav-item" data-sveltekit-preload-data>
+      <Icon icon="mdi:cog" width="24" />
+      <span>Gestisci</span>
     </a>
   </nav>
 </div>

@@ -17,6 +17,23 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    target: 'es2020',
+    minify: 'esbuild',
+    cssMinify: true,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['svelte'],
+          'ui': ['m3-svelte', '@iconify/svelte']
+        }
+      }
+    }
+  },
+  optimizeDeps: {
+    include: ['m3-svelte', '@iconify/svelte']
+  },
   define: {
     'import.meta.env.VITE_API_URL': JSON.stringify(process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:8000/api')
   }

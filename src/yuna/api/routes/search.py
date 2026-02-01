@@ -390,7 +390,7 @@ async def get_series_details(series_id: int):
 # ==================== Search Helpers ====================
 
 async def _search_anime(query: str) -> List[SearchResult]:
-    """Search for anime with AniList metadata + AnimeWorld download links."""
+    """Search for anime with AniList metadata only."""
     results = []
     anilist = get_anilist()
 
@@ -417,37 +417,6 @@ async def _search_anime(query: str) -> List[SearchResult]:
 
     except Exception as e:
         logger.error(f"AniList anime search error: {e}", exc_info=True)
-
-    # Fallback to AnimeWorld if AniList fails or as supplement
-    try:
-        miko = Miko()
-        anime_list = miko.findAnime(query)  # Synchronous function, no await
-
-        for anime in anime_list[:10]:
-            name = anime.getName() if hasattr(anime, 'getName') else str(anime)
-            link = anime.getLink() if hasattr(anime, 'getLink') else None
-            cover = anime.getCover() if hasattr(anime, 'getCover') else None
-
-            # Check if we already have this anime from Jikan
-            existing = next((r for r in results if r.name.lower() == name.lower()), None)
-            
-            if not existing:
-                results.append(SearchResult(
-                    name=name,
-                    type="anime",
-                    poster=cover,
-                    provider="animeworld",
-                    provider_url=link,
-                ))
-            else:
-                # Update existing result with download info
-                existing.provider = "animeworld"
-                existing.provider_url = link
-                if not existing.poster and cover:
-                    existing.poster = cover
-
-    except Exception as e:
-        logger.error(f"AnimeWorld search error: {e}")
 
     return results
 

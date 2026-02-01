@@ -224,8 +224,6 @@
 <style>
   .dashboard {
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
     background: var(--m3c-surface);
   }
 
@@ -262,12 +260,14 @@
 
   /* Main Content */
   .main-content {
-    flex: 1;
     max-width: 1200px;
     margin: 0 auto;
-    padding: 16px;
-    padding-bottom: 100px;
+    padding: 24px 20px;
+    padding-bottom: 140px;
     width: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+    max-height: calc(100vh - 64px);
   }
 
   .loading-container,

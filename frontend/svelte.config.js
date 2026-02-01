@@ -5,6 +5,9 @@ const config = {
   kit: {
     adapter: adapter(),
     appDir: 'src',
+    prerender: {
+      handleHttpError: 'warn'
+    }
   }
 };
 

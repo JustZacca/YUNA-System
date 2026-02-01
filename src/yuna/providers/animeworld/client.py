@@ -225,6 +225,18 @@ class Airi:
             logger.warning(
                 f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
 
+    def update_available_episodes(self, name, episodi_disponibili: int):
+        """
+        Aggiorna il numero di episodi disponibili dell'anime nel database.
+        """
+        success = self.db.update_anime_available_episodes(name, episodi_disponibili)
+        if success:
+            logger.info(
+                f"Numero episodi disponibili aggiornato per l'anime '{name}'.")
+        else:
+            logger.warning(
+                f"L'anime '{name}' non trovato nella configurazione. Nessun aggiornamento effettuato.")
+
     def update_last_update(self, name, last_update):
         """
         Aggiorna la data di last_update dell'anime nel database.
