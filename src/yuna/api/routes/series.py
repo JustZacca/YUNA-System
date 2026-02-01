@@ -3,6 +3,7 @@ Series/TV API Routes.
 CRUD operations for TV series library.
 """
 
+from datetime import datetime
 from typing import List, Optional
 import json
 
@@ -73,6 +74,18 @@ class SeriesDetail(SeriesBase):
 class UpdateMetadataRequest(BaseModel):
     """Request to update series metadata from TMDB."""
     tmdb_id: int
+
+
+class AddFromTmdbRequest(BaseModel):
+    """Request to add series from TMDB without provider."""
+    tmdb_id: int
+
+
+class AssociateProviderRequest(BaseModel):
+    """Request to associate provider to existing series."""
+    provider: str
+    media_id: int
+    slug: Optional[str] = None
 
 
 # ==================== Routes ====================
@@ -288,3 +301,144 @@ async def delete_series(
         "message": f"Series '{name}' deleted successfully",
         "files_deleted": deleted_files
     }
+
+@router.post("/from-tmdb", response_model=SeriesDetail)
+async def add_series_from_tmdb(
+    request: AddFromTmdbRequest,
+    db: DbDep,
+    user: CurrentUser
+):
+    """
+    Add series from TMDB without provider.
+    Creates entry with metadata only, provider can be associated later.
+    """
+    try:
+        # Fetch metadata from TMDB
+        tmdb = get_tmdb()
+        tmdb_data = await tmdb.get_tv(request.tmdb_id)
+        
+        if not tmdb_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Series with TMDB ID {request.tmdb_id} not found"
+            )
+        
+        series_name = tmdb_data.name
+        year = tmdb_data.first_air_date.split("-")[0] if tmdb_data.first_air_date else None
+        
+        # Check if series already exists
+        existing = db.get_tv_by_name(series_name)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Series '{series_name}' already exists in library"
+            )
+        
+        # Use number_of_episodes from TMDB data
+        total_episodes = tmdb_data.number_of_episodes
+        
+        # Create series entry without provider - use db.add_tv() with required params
+        db.add_tv(
+            name=series_name,
+            link="",  # No provider yet
+            last_update=datetime.now(),
+            numero_episodi=total_episodes,
+            slug=None,
+            media_id=None,
+            provider_language="it",
+            year=int(year) if year else None,
+            provider=None
+        )
+        
+        # Update with TMDB metadata fields
+        db.update_anime(  # Uses the same generic update method
+            name=series_name,
+            tmdb_id=request.tmdb_id,
+            overview=tmdb_data.overview[:500] if tmdb_data.overview else None,
+            poster_path=tmdb_data.poster_path,
+            backdrop_path=tmdb_data.backdrop_path,
+            vote_average=tmdb_data.vote_average,
+            genre_ids=json.dumps(tmdb_data.genre_ids) if tmdb_data.genre_ids else None,
+            status=tmdb_data.status
+        )
+        
+        logger.info(f"Added series '{series_name}' from TMDB (ID: {request.tmdb_id}) without provider")
+        
+        return SeriesDetail(
+            name=series_name,
+            link="",
+            episodes_downloaded=0,
+            episodes_total=total_episodes,
+            provider=None,
+            year=int(year) if year else None,
+            tmdb_id=request.tmdb_id,
+            overview=tmdb_data.overview,
+            poster_path=tmdb_data.poster_path,
+            backdrop_path=tmdb_data.backdrop_path,
+            vote_average=tmdb_data.vote_average,
+            genre_ids=tmdb_data.genre_ids,
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding series from TMDB: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.post("/{name}/associate-provider", response_model=SeriesDetail)
+async def associate_series_provider(
+    name: str,
+    request: AssociateProviderRequest,
+    db: DbDep,
+    user: CurrentUser
+):
+    """
+    Associate provider (StreamingCommunity) to existing series.
+    Updates series with provider info.
+    """
+    # Verify series exists
+    series = db.get_tv_by_name(name)
+    if not series:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Series '{name}' not found"
+        )
+    
+    try:
+        # Build link based on provider
+        if request.provider.lower() == "streamingcommunity":
+            link = f"https://streamingcommunity.dev/watch/{request.media_id}"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported provider: {request.provider}"
+            )
+        
+        # Update series with provider info
+        update_data = {
+            "link": link,
+            "provider": request.provider,
+            "media_id": request.media_id,
+        }
+        
+        if request.slug:
+            update_data["slug"] = request.slug
+        
+        db.update_tv(name, **update_data)
+        logger.info(f"Associated provider '{request.provider}' for series '{name}' (media_id: {request.media_id})")
+        
+        # Return updated series
+        return await get_series(name, db)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error associating provider for series '{name}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )

@@ -470,6 +470,39 @@ class Database:
             """, (seasons_data, name))
             return cursor.rowcount > 0
 
+    def update_tv(self, name: str, **kwargs) -> bool:
+        """Update TV show metadata fields dynamically."""
+        if not kwargs:
+            return False
+
+        # Build UPDATE query dynamically
+        set_clauses = []
+        values = []
+        
+        for key, value in kwargs.items():
+            set_clauses.append(f"{key} = ?")
+            values.append(value)
+        
+        values.append(name)  # Add name for WHERE clause
+        
+        query = f"""
+            UPDATE tv 
+            SET {', '.join(set_clauses)}
+            WHERE name = ?
+        """
+        
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(query, values)
+                if cursor.rowcount > 0:
+                    logger.info(f"Updated TV show '{name}' with fields: {list(kwargs.keys())}")
+                    return True
+                logger.warning(f"TV show '{name}' not found for update.")
+                return False
+        except Exception as e:
+            logger.error(f"Error updating TV show '{name}': {e}")
+            return False
+
     def remove_tv(self, name: str) -> bool:
         """Remove TV show from database."""
         with self._get_connection() as conn:
@@ -560,6 +593,39 @@ class Database:
                 WHERE name = ?
             """, (last_update.strftime("%Y-%m-%d %H:%M:%S"), name))
             return cursor.rowcount > 0
+
+    def update_movie(self, name: str, **kwargs) -> bool:
+        """Update movie metadata fields dynamically."""
+        if not kwargs:
+            return False
+
+        # Build UPDATE query dynamically
+        set_clauses = []
+        values = []
+        
+        for key, value in kwargs.items():
+            set_clauses.append(f"{key} = ?")
+            values.append(value)
+        
+        values.append(name)  # Add name for WHERE clause
+        
+        query = f"""
+            UPDATE movies 
+            SET {', '.join(set_clauses)}
+            WHERE name = ?
+        """
+        
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(query, values)
+                if cursor.rowcount > 0:
+                    logger.info(f"Updated movie '{name}' with fields: {list(kwargs.keys())}")
+                    return True
+                logger.warning(f"Movie '{name}' not found for update.")
+                return False
+        except Exception as e:
+            logger.error(f"Error updating movie '{name}': {e}")
+            return False
 
     def remove_movie(self, name: str) -> bool:
         """Remove movie from database."""

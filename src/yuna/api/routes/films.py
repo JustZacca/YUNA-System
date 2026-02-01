@@ -3,6 +3,7 @@ Films API Routes.
 CRUD operations for films library.
 """
 
+from datetime import datetime
 from typing import List, Optional
 import json
 
@@ -71,6 +72,18 @@ class FilmDetail(FilmBase):
 class UpdateMetadataRequest(BaseModel):
     """Request to update film metadata from TMDB."""
     tmdb_id: int
+
+
+class AddFromTmdbRequest(BaseModel):
+    """Request to add film from TMDB without provider."""
+    tmdb_id: int
+
+
+class AssociateProviderRequest(BaseModel):
+    """Request to associate provider to existing film."""
+    provider: str
+    media_id: int
+    slug: Optional[str] = None
 
 
 # ==================== Routes ====================
@@ -284,3 +297,141 @@ async def delete_film(
         "message": f"Film '{name}' deleted successfully",
         "files_deleted": deleted_files
     }
+
+
+@router.post("/from-tmdb", response_model=FilmDetail)
+async def add_film_from_tmdb(
+    request: AddFromTmdbRequest,
+    db: DbDep,
+    user: CurrentUser
+):
+    """
+    Add film from TMDB without provider.
+    Creates entry with metadata only, provider can be associated later.
+    """
+    try:
+        # Fetch metadata from TMDB
+        tmdb = get_tmdb()
+        tmdb_data = await tmdb.get_movie(request.tmdb_id)
+        
+        if not tmdb_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Film with TMDB ID {request.tmdb_id} not found"
+            )
+        
+        film_name = tmdb_data.title
+        year = tmdb_data.release_date.split("-")[0] if tmdb_data.release_date else None
+        
+        # Check if film already exists
+        existing = db.get_movie_by_name(film_name)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Film '{film_name}' already exists in library"
+            )
+        
+        # Create film entry without provider - use db.add_movie() with required params
+        db.add_movie(
+            name=film_name,
+            link="",  # No provider yet
+            last_update=datetime.now(),
+            slug=None,
+            media_id=None,
+            provider_language="it",
+            year=int(year) if year else None,
+            provider=None
+        )
+        
+        # Update with TMDB metadata fields
+        db.update_anime(  # Uses the same generic update method
+            name=film_name,
+            tmdb_id=request.tmdb_id,
+            overview=tmdb_data.overview[:500] if tmdb_data.overview else None,
+            poster_path=tmdb_data.poster_path,
+            backdrop_path=tmdb_data.backdrop_path,
+            vote_average=tmdb_data.vote_average,
+            genre_ids=json.dumps(tmdb_data.genre_ids) if tmdb_data.genre_ids else None,
+            runtime=tmdb_data.runtime
+        )
+        
+        logger.info(f"Added film '{film_name}' from TMDB (ID: {request.tmdb_id}) without provider")
+        
+        return FilmDetail(
+            name=film_name,
+            link="",
+            downloaded=False,
+            provider=None,
+            year=int(year) if year else None,
+            tmdb_id=request.tmdb_id,
+            overview=tmdb_data.overview,
+            poster_path=tmdb_data.poster_path,
+            backdrop_path=tmdb_data.backdrop_path,
+            vote_average=tmdb_data.vote_average,
+            genre_ids=tmdb_data.genre_ids,
+            runtime=tmdb_data.runtime,
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding film from TMDB: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.post("/{name}/associate-provider", response_model=FilmDetail)
+async def associate_film_provider(
+    name: str,
+    request: AssociateProviderRequest,
+    db: DbDep,
+    user: CurrentUser
+):
+    """
+    Associate provider (StreamingCommunity) to existing film.
+    Updates film with provider info.
+    """
+    # Verify film exists
+    film = db.get_movie_by_name(name)
+    if not film:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Film '{name}' not found"
+        )
+    
+    try:
+        # Build link based on provider
+        if request.provider.lower() == "streamingcommunity":
+            link = f"https://streamingcommunity.dev/watch/{request.media_id}"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported provider: {request.provider}"
+            )
+        
+        # Update film with provider info
+        update_data = {
+            "link": link,
+            "provider": request.provider,
+            "media_id": request.media_id,
+        }
+        
+        if request.slug:
+            update_data["slug"] = request.slug
+        
+        db.update_movie(name, **update_data)
+        logger.info(f"Associated provider '{request.provider}' for film '{name}' (media_id: {request.media_id})")
+        
+        # Return updated film
+        return await get_film(name, db)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error associating provider for film '{name}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )

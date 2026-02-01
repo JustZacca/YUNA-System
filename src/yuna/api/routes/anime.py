@@ -4,6 +4,7 @@ CRUD operations and download management for anime library.
 """
 
 import asyncio
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
@@ -304,6 +305,16 @@ class AnimeMetadataUpdate(BaseModel):
     genres: Optional[str] = None  # Comma-separated
     status: Optional[str] = None
     poster_url: Optional[str] = None
+
+
+class AddFromAnilistRequest(BaseModel):
+    """Request to add anime from AniList without provider."""
+    anilist_id: int
+
+
+class AssociateProviderRequest(BaseModel):
+    """Request to associate provider to existing anime."""
+    provider_url: str
 
 
 @router.patch("/{name}", response_model=AnimeDetail)
@@ -807,7 +818,7 @@ async def delete_anime(
         logger.error(f"Error deleting anime '{name}' from database: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting from database: {str(e)}"
+            detail=f"Database error: {str(e)}"
         )
     
     return {
@@ -815,3 +826,171 @@ async def delete_anime(
         "message": f"Anime '{name}' deleted successfully",
         "files_deleted": deleted_files
     }
+
+
+@router.post("/from-anilist", response_model=AnimeDetail)
+async def add_anime_from_anilist(
+    request: AddFromAnilistRequest,
+    db: DbDep,
+    user: CurrentUser
+):
+    """
+    Add anime from AniList without provider.
+    Creates entry with metadata only, provider can be associated later.
+    """
+    try:
+        # Fetch metadata from AniList
+        anilist = get_anilist()
+        anilist_data = await anilist.get_anime_by_id(request.anilist_id)
+        
+        if not anilist_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Anime with AniList ID {request.anilist_id} not found"
+            )
+        
+        anime_name = anilist_data.get("name", "Unknown")
+        
+        # Check if anime already exists
+        existing = db.get_anime_by_name(anime_name)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Anime '{anime_name}' already exists in library"
+            )
+        
+        # Create anime entry without provider link
+        # First add basic fields
+        db.add_anime(
+            name=anime_name,
+            link="",  # No provider yet
+            last_update=datetime.now(),
+            numero_episodi=anilist_data.get("episodes", 0)
+        )
+        
+        # Then update with metadata fields
+        db.update_anime(
+            name=anime_name,
+            anilist_id=request.anilist_id,
+            synopsis=anilist_data.get("synopsis", "")[:500] if anilist_data.get("synopsis") else "",
+            rating=anilist_data.get("rating"),
+            year=anilist_data.get("year"),
+            genres=",".join(anilist_data.get("genres", [])),
+            status=anilist_data.get("status", ""),
+            poster_url=anilist_data.get("poster_url", "")
+        )
+        
+        logger.info(f"Added anime '{anime_name}' from AniList (ID: {request.anilist_id}) without provider")
+
+        return AnimeDetail(
+            name=anime_name,
+            link="",
+            episodes_downloaded=0,
+            episodes_total=anilist_data.get("episodes", 0),
+            missing_episodes=[],
+            anilist_id=request.anilist_id,
+            synopsis=anilist_data.get("synopsis", ""),
+            rating=anilist_data.get("rating"),
+            year=anilist_data.get("year"),
+            genres=anilist_data.get("genres", []),
+            status=anilist_data.get("status", ""),
+            poster_url=anilist_data.get("poster_url", ""),
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding anime from AniList: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.post("/{name}/associate-provider", response_model=AnimeDetail)
+async def associate_anime_provider(
+    name: str,
+    request: AssociateProviderRequest,
+    db: DbDep,
+    user: CurrentUser
+):
+    """
+    Associate provider (AnimeWorld) to existing anime.
+    Updates anime with provider link and refreshes episode info.
+    """
+    # Verify anime exists
+    anime = db.get_anime_by_name(name)
+    if not anime:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anime '{name}' not found"
+        )
+    
+    # Validate URL
+    url = request.provider_url.strip()
+    if not any(domain in url.lower() for domain in ["animeworld.tv", "animeworld.so", "animeworld.ac"]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL must be from AnimeWorld"
+        )
+    
+    try:
+        # Use Miko to get episode info from provider
+        miko = Miko()
+        await miko.loadAnime(url)
+        
+        if not miko.anime:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not load anime from provider URL"
+            )
+        
+        # Get episodes
+        episodes = await miko.getEpisodes()
+        if not episodes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not fetch episodes from provider"
+            )
+        
+        # Update anime with provider link and episodes available
+        update_data = {
+            "link": url,
+            "episodi_disponibili": len(episodes)
+        }
+        
+        db.update_anime(name, **update_data)
+        logger.info(f"Associated provider for anime '{name}': {len(episodes)} episodes available")
+        
+        # Return updated anime
+        updated = db.get_anime_by_name(name)
+        downloaded = updated.get("episodi_scaricati", 0)
+        available = len(episodes)
+        total = updated.get("numero_episodi", 0)
+        
+        missing = [n for n in range(1, available + 1) if n > downloaded]
+        
+        return AnimeDetail(
+            name=updated["name"],
+            link=url,
+            episodes_downloaded=downloaded,
+            episodes_total=total,
+            episodes_available=available,
+            missing_episodes=missing,
+            anilist_id=updated.get("anilist_id"),
+            synopsis=updated.get("synopsis"),
+            rating=updated.get("rating"),
+            year=updated.get("year"),
+            genres=updated.get("genres", "").split(",") if updated.get("genres") else [],
+            status=updated.get("status"),
+            poster_url=updated.get("poster_url"),
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error associating provider for anime '{name}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
