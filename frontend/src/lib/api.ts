@@ -20,7 +20,8 @@ import type {
   AssociateProviderRequest
 } from './types';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+// Use relative path - nginx will proxy to backend
+const API_BASE_URL = '/api';
 
 class ApiError extends Error {
   constructor(
